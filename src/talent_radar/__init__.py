@@ -1,0 +1,2 @@
+"""Talent Radar prototype package."""
+
