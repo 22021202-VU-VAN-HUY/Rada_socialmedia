@@ -1,9 +1,9 @@
 # Talent Radar - Plan MVP 4 tuần cho VSF
 
-> **Phiên bản:** 4.0
+> **Phiên bản:** 4.1
 > **Ngày cập nhật:** 17/07/2026  
 > **Đối tượng:** VSF - VinSmart Future
-> **Mục tiêu:** Theo dõi người bên ngoài nói gì về VSF, gồm nguồn public và nhóm kín/cộng đồng đóng có quyền truy cập hợp lệ, sau đó chuyển thành chỉ số, cảnh báo và insight phục vụ ra quyết định.
+> **Mục tiêu:** Theo dõi comment và thảo luận bên ngoài nói về VSF, kể cả khi người dùng không gọi đúng tên VSF mà dùng viết tắt, tiếng lóng hoặc cách gọi gián tiếp, sau đó chuyển thành chỉ số, cảnh báo và insight phục vụ ra quyết định.
 
 ---
 
@@ -12,7 +12,7 @@
 Talent Radar là hệ thống social listening và external voice intelligence cho VSF. Hệ thống không chỉ đếm số bài nhắc tới VSF, mà trả lời bốn câu hỏi thực dụng:
 
 1. Ai đang nói gì về VSF?
-2. Họ nói ở đâu: báo chí, mạng xã hội public, nhóm kín có cấp quyền, đối tác hay kênh owned?
+2. Họ nói ở đâu: Facebook, TikTok, Threads, nhóm public, nhóm kín có cấp quyền, đối tác hay kênh owned?
 3. Nội dung đó tích cực, tiêu cực, trung lập, đang nói về chủ đề nào và có rủi ro không?
 4. VSF nên làm gì tiếp theo: điều chỉnh thông điệp, phản hồi, chuẩn bị nội dung, xử lý rủi ro hay theo dõi thêm?
 
@@ -21,6 +21,14 @@ MVP 4 tuần tập trung vào một bản chạy được, có dữ liệu thậ
 ---
 
 ## 2. Phạm vi dữ liệu
+
+Phạm vi chính của MVP là **đọc comment, bài viết và thảo luận có liên quan tới VSF** trên ba nền tảng ưu tiên:
+
+| Nền tảng | Phạm vi MVP | Điều kiện |
+|---|---|---|
+| Facebook | Bài viết cá nhân public, comment public, group mở, group kín có quyền | Chỉ thu nguồn public hoặc nguồn restricted đã được duyệt; không dùng cookie/session cá nhân |
+| TikTok | Video public, caption, comment public liên quan VSF | Dùng API/export/crawl hợp lệ theo quyền nền tảng; lưu reference và timestamp |
+| Threads | Post public, reply/comment public liên quan VSF | Dùng nguồn public/export hợp lệ; kiểm tra độ nhiễu do alias ngắn |
 
 | Nhóm nguồn | Ví dụ | Cách dùng |
 |---|---|---|
@@ -37,6 +45,25 @@ MVP 4 tuần tập trung vào một bản chạy được, có dữ liệu thậ
 - Không dùng cookie/session cá nhân, không bypass login/CAPTCHA/access control.
 - Không thu inbox, private profile hoặc dữ liệu cá nhân ngoài mục đích đã duyệt.
 - Dashboard phải gắn nhãn `restricted source`, hiển thị sample size và không suy rộng thành "dư luận chung".
+
+### 2.1 Nhận diện VSF bằng AI và Query Pack
+
+Người dùng có thể nói về VSF mà không dùng đúng tên chính thức. Vì vậy hệ thống cần một **Query Pack + AI relevance layer** để nhận diện:
+
+| Nhóm tín hiệu | Ví dụ | Cách xử lý |
+|---|---|---|
+| Tên chính thức | VSF, VinSmart Future, Vin Smart Future | Match trực tiếp, confidence cao |
+| Viết tắt/biến thể | VFS, VSF, Vinfuture, VinFuture, Vin future | Match có kiểm tra ngữ cảnh để tránh nhầm với VinFuture Prize hoặc thực thể khác |
+| Tiếng lóng/Gen Z | V đỏ, nhà V, công ty công nghệ V, bên V, hệ V | Không tự tính là relevant nếu thiếu ngữ cảnh; AI cần xem câu xung quanh, thread và topic |
+| Nhắc gián tiếp | "chương trình công nghệ của V", "quỹ/tổ chức tương lai của V", "bên Vin làm về future" | Đưa vào `watchlist` hoặc `needs_review` nếu chưa đủ bằng chứng |
+| Từ khóa loại trừ | VinFast, Vingroup, VinSmart phone, VinFuture Prize nếu không liên quan VSF | Loại hoặc hạ confidence khi không có anchor VSF |
+
+Quy tắc bắt buộc:
+
+- Không chỉ dựa vào keyword đơn lẻ. Alias ngắn như `V`, `V đỏ`, `VFS` phải có ngữ cảnh đi kèm.
+- Mỗi item relevant cần có `matched_terms`, `context_evidence`, `confidence` và `reason`.
+- Các trường hợp mơ hồ được đưa vào review queue thay vì tự động tính vào KPI.
+- Query Pack phải cập nhật được hằng tuần vì tiếng lóng và cách gọi trên mạng thay đổi nhanh.
 
 ---
 
@@ -92,13 +119,14 @@ MVP ưu tiên 3 mục tiêu đầu: danh tiếng, chiến dịch và rủi ro. M
    - Màn hình issue/risk queue.
 
 2. Pipeline dữ liệu:
-   - Import CSV/JSON cho dữ liệu public và nhóm kín được cấp quyền.
-   - Một collector public đơn giản nếu nguồn được duyệt sẵn.
+   - Import CSV/JSON cho dữ liệu Facebook, TikTok, Threads và nhóm kín được cấp quyền.
+   - Connector/collector hợp lệ cho nguồn public đã được duyệt nếu có credential phù hợp.
    - Chuẩn hóa dữ liệu về cùng schema.
    - Dedup theo URL/content hash/thread reference.
 
 3. Lớp phân tích:
    - Relevance: nội dung có thật sự nói về VSF không.
+   - Alias detection: nhận diện VSF qua tên chính thức, viết tắt, tiếng lóng, cách gọi gián tiếp.
    - Voice type: public earned, restricted authorized, partner, sponsored, owned, unknown.
    - Sentiment: positive, neutral, negative, mixed.
    - Topic/risk: chủ đề và mức độ rủi ro.
@@ -125,8 +153,8 @@ Mục tiêu: thống nhất khách hàng cần theo dõi gì, nguồn nào đư�
 Việc cần làm:
 
 - Chốt 3 mục tiêu pilot: danh tiếng, chiến dịch, rủi ro.
-- Lập danh sách từ khóa VSF, alias, chương trình, đối tác, loại trừ.
-- Lập Source Registry: public, owned, partner, sponsored, restricted.
+- Lập Query Pack VSF: tên chính thức, VFS/VSF, Vinfuture, V đỏ, công ty công nghệ V, alias Gen Z, nhắc gián tiếp, từ khóa loại trừ.
+- Lập Source Registry cho Facebook, TikTok, Threads: public, owned, partner, sponsored, restricted.
 - Chốt quy tắc nhóm kín: ai cung cấp, quyền gì, lưu bao lâu, trường nào được lưu.
 - Thiết kế schema dữ liệu và file import mẫu.
 - Chuẩn bị dashboard skeleton.
@@ -134,7 +162,7 @@ Việc cần làm:
 Kết quả cuối tuần:
 
 - Source Registry v1.
-- Query Pack v1.
+- Query Pack v1 có alias, tiếng lóng, rule loại trừ và mẫu review.
 - Metric Contract v1.
 - Import CSV/JSON chạy được với dữ liệu mẫu.
 
@@ -147,7 +175,7 @@ Việc cần làm:
 - Xây importer cho CSV/JSON.
 - Chuẩn hóa item: source, author hash, content, timestamp, engagement, permalink/reference.
 - Dedup theo URL/hash/thread reference.
-- Gắn nhãn relevance, voice type, sentiment, topic bằng rule + model nhẹ.
+- Gắn nhãn relevance, alias match, voice type, sentiment, topic bằng rule + model nhẹ.
 - Thêm review queue để người dùng sửa nhãn.
 - Lưu audit log cho thay đổi nhãn.
 
@@ -208,9 +236,9 @@ Kết quả cuối tuần:
 | UI | Streamlit |
 | Backend logic | Python |
 | Storage | SQLite cho MVP local; PostgreSQL nếu deploy server |
-| Data import | CSV/JSON importer |
+| Data import | CSV/JSON importer cho Facebook, TikTok, Threads |
 | Scheduler | Manual run hoặc lightweight scheduler |
-| AI/rule layer | Rule-based trước, model/LLM hỗ trợ khi có API key |
+| AI/rule layer | Query Pack + rule-based + model/LLM hỗ trợ nhận diện alias và ngữ cảnh |
 | Export | CSV/Markdown/HTML report |
 
 ### 7.2 Data flow
@@ -224,7 +252,7 @@ Raw item store
       ↓
 Normalize + dedup
       ↓
-Relevance + voice type + sentiment + topic + risk
+Alias detection + relevance + voice type + sentiment + topic + risk
       ↓
 Human review queue
       ↓
@@ -238,7 +266,7 @@ Metric snapshots + dashboard + reports
 | `sources` | Danh sách nguồn, loại nguồn, quyền truy cập, trạng thái |
 | `raw_items` | Dữ liệu gốc đã import, immutable |
 | `normalized_items` | Nội dung đã chuẩn hóa |
-| `annotations` | Relevance, sentiment, topic, risk, voice type |
+| `annotations` | Alias match, relevance, sentiment, topic, risk, voice type |
 | `reviews` | Lịch sử người dùng sửa/duyệt nhãn |
 | `metric_snapshots` | KPI theo ngày/tuần/source/purpose |
 | `issues` | Cảnh báo rủi ro và trạng thái xử lý |
@@ -269,6 +297,7 @@ Không có đủ metadata trên thì nguồn chỉ được để `pending`, kh�
 - Không xây hệ thống crawling lén hoặc bypass nền tảng.
 - Không tự động thu thập group kín nếu chưa có quyền và retention policy.
 - Không xử lý inbox, private profile hoặc dữ liệu cá nhân ngoài mục đích đã duyệt.
+- Không tự động kết luận mọi câu có chữ `V`, `V đỏ`, `VFS` là VSF nếu thiếu ngữ cảnh.
 - Không làm cross-platform identity resolution.
 - Không làm realtime toàn diện.
 - Không làm influence score hộp đen.
@@ -281,6 +310,7 @@ Không có đủ metadata trên thì nguồn chỉ được để `pending`, kh�
 MVP được xem là hoàn thành khi:
 
 - Có ít nhất một nguồn public/import chạy được.
+- Query Pack nhận diện được tên chính thức, viết tắt, tiếng lóng và nhắc gián tiếp về VSF, có cơ chế review cho case mơ hồ.
 - Nếu dùng nhóm kín, nguồn đó có approval metadata đầy đủ.
 - 100% item có provenance: source, timestamp, reference/permalink hoặc file import.
 - Dashboard tách rõ public, restricted, owned, partner, sponsored.
@@ -295,11 +325,13 @@ MVP được xem là hoàn thành khi:
 ## 10. Cần khách hàng chốt ngay
 
 1. Danh sách nguồn public muốn theo dõi.
-2. Danh sách nhóm kín/cộng đồng đóng có thể cung cấp dữ liệu hợp lệ.
-3. Người chịu trách nhiệm phê duyệt nguồn và retention.
-4. Bộ từ khóa chính xác của VSF, chương trình, đối tác, alias và từ khóa loại trừ.
-5. Chiến dịch hoặc sự kiện muốn đo trong 4 tuần.
-6. Mẫu báo cáo khách hàng muốn nhận: daily digest, weekly brief hay dashboard-only.
-7. Quy định nội bộ về việc trích dẫn nguyên văn comment từ nhóm kín.
+2. Danh sách nguồn Facebook, TikTok, Threads muốn theo dõi.
+3. Danh sách nhóm kín/cộng đồng đóng trên Facebook có thể cung cấp dữ liệu hợp lệ.
+4. Người chịu trách nhiệm phê duyệt nguồn và retention.
+5. Bộ từ khóa chính xác của VSF, gồm VSF/VFS, Vinfuture, V đỏ, công ty công nghệ V, alias Gen Z, chương trình, đối tác và từ khóa loại trừ.
+6. Ví dụ comment thật hoặc giả lập cho các cách gọi mơ hồ để làm golden set review.
+7. Chiến dịch hoặc sự kiện muốn đo trong 4 tuần.
+8. Mẫu báo cáo khách hàng muốn nhận: daily digest, weekly brief hay dashboard-only.
+9. Quy định nội bộ về việc trích dẫn nguyên văn comment từ nhóm kín.
 
-Nếu 7 điểm này được chốt trong tuần 1, MVP 4 tuần có thể đi theo hướng demo được với dữ liệu thật, có KPI và có quy trình vận hành rõ ràng.
+Nếu 9 điểm này được chốt trong tuần 1, MVP 4 tuần có thể đi theo hướng demo được với dữ liệu thật, có KPI và có quy trình vận hành rõ ràng.
