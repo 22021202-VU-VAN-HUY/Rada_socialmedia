@@ -1,0 +1,53 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: talent_radar
+      POSTGRES_USER: talent_radar
+      POSTGRES_PASSWORD: talent_radar
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U talent_radar -d talent_radar"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    image: python:3.11-slim
+    working_dir: /app
+    command: >
+      sh -c "pip install -e . &&
+             uvicorn talent_radar.api.main:app --host 0.0.0.0 --port 8000"
+    environment:
+      DATABASE_URL: postgresql+psycopg://talent_radar:talent_radar@db:5432/talent_radar
+      SOURCE_REGISTRY_PATH: config/source_registry.example.yaml
+      QUERY_PACK_PATH: config/query_pack_vsf.yaml
+      AI_PROVIDER: rule
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+    depends_on:
+      db:
+        condition: service_healthy
+
+  dashboard:
+    image: python:3.11-slim
+    working_dir: /app
+    command: >
+      sh -c "pip install -e . &&
+             streamlit run src/talent_radar/dashboard/app.py --server.address 0.0.0.0 --server.port 8501"
+    environment:
+      BACKEND_URL: http://api:8000
+    ports:
+      - "8501:8501"
+    volumes:
+      - .:/app
+    depends_on:
+      - api
+
+volumes:
+  postgres_data:

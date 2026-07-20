@@ -1,5 +1,49 @@
 # Talent Radar
 
+## Kiến trúc mới theo Project Plan
+
+Repo hiện bắt đầu được tách thành các phần có thể mở rộng:
+
+- `talent_radar.api`: FastAPI backend cho source, classify, health check.
+- `talent_radar.models`: SQLAlchemy models cho source, crawl run, item, insight, alert, review, cost log.
+- `talent_radar.services`: Query Pack, rule classifier, source registry.
+- `talent_radar.jobs`: daily collection job skeleton.
+- `config/query_pack_vsf.yaml`: tên chính thức, alias, slang Gen Z, nhắc gián tiếp và exclusion.
+- `config/source_registry.example.yaml`: nguồn Facebook/TikTok/Threads mẫu.
+
+Chạy API local:
+
+```powershell
+pip install -e .
+uvicorn talent_radar.api.main:app --reload
+```
+
+Đồng bộ source registry mẫu:
+
+```powershell
+Invoke-RestMethod -Method Post http://localhost:8000/sources/sync
+```
+
+Test classifier rule-based:
+
+```powershell
+Invoke-RestMethod -Method Post http://localhost:8000/classify `
+  -ContentType "application/json" `
+  -Body '{"text":"VSF deadline đăng ký khi nào?","platform":"facebook"}'
+```
+
+Chạy daily job skeleton:
+
+```powershell
+python -m talent_radar.jobs.daily_collect
+```
+
+Chạy bằng Docker Compose:
+
+```powershell
+docker compose up --build
+```
+
 Prototype dashboard cho kế hoạch MVP social listening VSF-first.
 
 ## Chạy dashboard mẫu

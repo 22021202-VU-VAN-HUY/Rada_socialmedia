@@ -1,0 +1,56 @@
+entity: VSF
+version: "1.0"
+
+exact:
+  - VSF
+  - VinSmart Future
+  - Vin Smart Future
+
+aliases:
+  - VFS
+  - Vinfuture
+  - VinFuture
+  - Vin future
+
+ecosystem_slang:
+  - Vin do
+  - nha Vin
+  - nha V
+  - ben Vin
+  - ben V
+  - cong ty cong nghe Vin
+  - cong ty cong nghe V
+  - he Vin
+  - he V
+
+location_indirect:
+  - cong ty o Technopark
+  - ben Technopark
+  - cho Vin o Technopark
+  - cong ty o Hoa Lac
+
+program_indirect:
+  - chuong trinh cong nghe cua Vin
+  - chuong trinh tuong lai cua V
+  - cong dong cong nghe ben Vin
+  - hoc bong cong nghe ben Vin
+
+context_anchors:
+  - mentor
+  - workshop
+  - dang ky
+  - deadline
+  - chuong trinh
+  - hoc vien
+  - cong dong
+  - cong nghe
+  - VSF
+  - VinSmart Future
+
+exclusions:
+  - VinFast
+  - Vingroup
+  - VinFuture Prize
+  - VinSmart phone
+  - VFS file
+  - VSF FC
