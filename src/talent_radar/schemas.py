@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 Platform = Literal["facebook", "tiktok", "threads", "manual"]
@@ -68,3 +68,44 @@ class ClassificationResult(BaseModel):
     recommendation: dict[str, Any]
     evidence: Evidence
     review_status: str
+
+
+class ImportRecord(BaseModel):
+    source_id: str
+    platform: Platform
+    item_type: str = "post"
+    content_text: str
+    external_id: str | None = None
+    parent_external_id: str | None = None
+    parent_item_id: str | None = None
+    permalink: str | None = None
+    import_batch_id: str | None = None
+    published_at: datetime | None = None
+    collected_at: datetime | None = None
+    author_id: str | None = None
+    author_hash: str | None = None
+    raw_metadata: dict[str, Any] = Field(default_factory=dict)
+
+    @model_validator(mode="before")
+    @classmethod
+    def coerce_content_aliases(cls, data: Any) -> Any:
+        if isinstance(data, dict) and not data.get("content_text"):
+            for key in ("text", "content", "raw_content", "message", "caption"):
+                if data.get(key):
+                    data = {**data, "content_text": data[key]}
+                    break
+        return data
+
+
+class ImportBatchRequest(BaseModel):
+    import_batch_id: str | None = None
+    records: list[ImportRecord]
+
+
+class ImportBatchResult(BaseModel):
+    import_batch_id: str
+    received: int
+    inserted: int
+    skipped_duplicates: int
+    raw_item_ids: list[str]
+    normalized_item_ids: list[str]

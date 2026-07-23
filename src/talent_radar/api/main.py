@@ -1,11 +1,19 @@
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from talent_radar.core.config import get_settings
 from talent_radar.core.database import create_all, get_db
 from talent_radar.models import Source
-from talent_radar.schemas import ClassificationRequest, ClassificationResult, SourceCreate, SourceRead
+from talent_radar.schemas import (
+    ClassificationRequest,
+    ClassificationResult,
+    ImportBatchRequest,
+    ImportBatchResult,
+    SourceCreate,
+    SourceRead,
+)
+from talent_radar.services.import_adapter import run_import_batch
 from talent_radar.services.query_pack import QueryPackMatcher, load_query_pack
 from talent_radar.services.rule_classifier import RuleClassifier
 from talent_radar.services.source_registry import load_source_registry, upsert_sources
@@ -55,3 +63,11 @@ def classify(payload: ClassificationRequest) -> ClassificationResult:
     pack = load_query_pack(settings.query_pack_path)
     classifier = RuleClassifier(QueryPackMatcher(pack))
     return classifier.classify(payload)
+
+
+@app.post("/imports", response_model=ImportBatchResult)
+def import_batch(payload: ImportBatchRequest, db: Session = Depends(get_db)) -> ImportBatchResult:
+    try:
+        return run_import_batch(db, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc

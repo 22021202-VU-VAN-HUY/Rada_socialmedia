@@ -32,6 +32,26 @@ Invoke-RestMethod -Method Post http://localhost:8000/classify `
   -Body '{"text":"VSF deadline đăng ký khi nào?","platform":"facebook"}'
 ```
 
+Import fallback bằng JSON:
+
+```powershell
+Invoke-RestMethod -Method Post http://localhost:8000/imports `
+  -ContentType "application/json" `
+  -Body '{
+    "import_batch_id": "manual_demo_001",
+    "records": [
+      {
+        "source_id": "fb_group_vsf_001",
+        "platform": "facebook",
+        "item_type": "comment",
+        "text": "VSF deadline đăng ký khi nào?",
+        "external_id": "comment_demo_001",
+        "permalink": "https://example.test/post/1"
+      }
+    ]
+  }'
+```
+
 Chạy daily job skeleton:
 
 ```powershell
