@@ -6,16 +6,12 @@ from talent_radar.core.config import get_settings
 from talent_radar.core.database import create_all, get_db
 from talent_radar.models import Source
 from talent_radar.schemas import (
-    ClassificationRequest,
-    ClassificationResult,
     ImportBatchRequest,
     ImportBatchResult,
     SourceCreate,
     SourceRead,
 )
 from talent_radar.services.import_adapter import run_import_batch
-from talent_radar.services.query_pack import QueryPackMatcher, load_query_pack
-from talent_radar.services.rule_classifier import RuleClassifier
 from talent_radar.services.source_registry import load_source_registry, upsert_sources
 
 app = FastAPI(title="Talent Radar API", version="0.1.0")
@@ -55,14 +51,6 @@ def sync_sources(db: Session = Depends(get_db)) -> list[Source]:
     settings = get_settings()
     source_data = load_source_registry(settings.source_registry_path)
     return upsert_sources(db, source_data)
-
-
-@app.post("/classify", response_model=ClassificationResult)
-def classify(payload: ClassificationRequest) -> ClassificationResult:
-    settings = get_settings()
-    pack = load_query_pack(settings.query_pack_path)
-    classifier = RuleClassifier(QueryPackMatcher(pack))
-    return classifier.classify(payload)
 
 
 @app.post("/imports", response_model=ImportBatchResult)

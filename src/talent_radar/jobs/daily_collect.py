@@ -29,15 +29,13 @@ def run_daily_collect(db: Session, lookback_hours: int | None = None) -> CrawlRu
         .all()
     )
 
-    # Connector TIPs will replace this placeholder with platform-specific collection.
+    # The Coc Coc crawler writes exports that can be imported by the API.
     run.completed_at = datetime.now(UTC)
     run.status = "completed"
     run.error_summary = None
-    run.cost_summary = {
+    run.result_summary = {
         "enabled_sources": len(enabled_sources),
-        "provider": settings.ai_provider,
-        "estimated_cost_usd": 0.0,
-        "note": "Collection adapters are not implemented yet; this run only synced sources.",
+        "note": "Source registry synced. Browser collection runs separately.",
     }
     db.commit()
     db.refresh(run)
@@ -53,7 +51,7 @@ def main() -> None:
                 "crawl_run_id": run.id,
                 "status": run.status,
                 "lookback_hours": run.lookback_hours,
-                "cost_summary": run.cost_summary,
+                "result_summary": run.result_summary,
             }
         )
 

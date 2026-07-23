@@ -18,13 +18,71 @@ def load_import_file(path: Path) -> list[ImportRecord]:
         with path.open("r", encoding="utf-8-sig", newline="") as handle:
             return [ImportRecord.model_validate(row) for row in csv.DictReader(handle)]
     if suffix == ".json":
-        with path.open("r", encoding="utf-8") as handle:
+        with path.open("r", encoding="utf-8-sig") as handle:
             data = json.load(handle)
+        if isinstance(data, dict) and data.get("crawler") == "coccoc-ui":
+            return _records_from_coccoc_export(data)
         rows = data.get("records", data) if isinstance(data, dict) else data
         if not isinstance(rows, list):
             raise ValueError("JSON import must be a list or an object with a records list")
         return [ImportRecord.model_validate(row) for row in rows]
     raise ValueError("Import file must be .csv or .json")
+
+
+def _records_from_coccoc_export(data: dict) -> list[ImportRecord]:
+    source_id = data.get("source_id")
+    if not source_id:
+        raise ValueError("Coc Coc export must include source_id")
+
+    records: list[ImportRecord] = []
+    for item in data.get("posts", []):
+        post = item.get("post") or {}
+        collected_at = item.get("collected_at") or data.get("collected_at")
+        if post.get("content"):
+            records.append(
+                ImportRecord(
+                    source_id=source_id,
+                    platform="facebook",
+                    item_type="post",
+                    content_text=post["content"],
+                    external_id=post.get("external_id"),
+                    permalink=post.get("url"),
+                    collected_at=collected_at,
+                    author_id=post.get("author"),
+                    raw_metadata={
+                        "author_display_name": post.get("author"),
+                        "group": post.get("group"),
+                        "reaction_count": post.get("reaction_count", 0),
+                        "reported_comment_count": post.get("reported_comment_count", 0),
+                        "collected_comment_count": post.get("collected_comment_count", 0),
+                    },
+                )
+            )
+
+        for comment in item.get("comments", []):
+            content = comment.get("content") or "[non-text comment]"
+            records.append(
+                ImportRecord(
+                    source_id=source_id,
+                    platform="facebook",
+                    item_type="reply" if comment.get("is_reply") else "comment",
+                    content_text=content,
+                    external_id=comment.get("external_id"),
+                    parent_external_id=comment.get("parent_external_id")
+                    or post.get("external_id"),
+                    permalink=comment.get("permalink"),
+                    collected_at=collected_at,
+                    author_id=comment.get("author"),
+                    raw_metadata={
+                        "author_display_name": comment.get("author"),
+                        "published_label": comment.get("published_label"),
+                        "parent_author": comment.get("parent_author"),
+                        "aria_label": comment.get("aria_label"),
+                        "non_text": not bool(comment.get("content")),
+                    },
+                )
+            )
+    return records
 
 
 def run_import_batch(db: Session, payload: ImportBatchRequest) -> ImportBatchResult:

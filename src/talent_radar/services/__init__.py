@@ -1,1 +1,1 @@
-"""Application services for collection, classification, alerts, and reports."""
+"""Application services for Facebook collection and data import."""

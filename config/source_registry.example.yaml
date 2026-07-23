@@ -1,76 +1,25 @@
 sources:
-  - id: fb_group_vsf_001
+  - id: fb_group_laptrinhvienit
     platform: facebook
     source_kind: group
-    source_name: "Example Facebook group"
-    source_url: "https://www.facebook.com/groups/example"
-    source_type: public_earned
-    access_basis: pending
-    authorization_status: pending
-    collection_method: import
-    enabled: false
+    source_name: "Tuyen dung - Tim viec IT"
+    source_url: "https://www.facebook.com/groups/346082662075299/"
+    source_type: public_group
+    access_basis: public_page_visible_to_authorized_user
+    authorization_status: approved
+    collection_method: coccoc_ui
+    enabled: true
     priority: P0
-    crawl_frequency: daily
+    crawl_frequency: manual
     lookback_hours: 24
     comment_policy:
-      mode: risk_based
+      mode: all_loaded
       max_comments_per_post: 100
-      crawl_comments_for:
-        - matched_keyword
-        - medium_or_above
-        - high_engagement
+      include_replies: true
     privacy:
-      pii_policy: hash_author_id
-      quote_policy: paraphrase_by_default
+      collect_only_visible_post_dialog: true
+      exclude_messenger_and_navigation: true
       retention_days: 90
     owner:
-      business_owner: Comms
-      approved_by: Data owner
-
-  - id: tiktok_vsf_watchlist_001
-    platform: tiktok
-    source_kind: account
-    source_name: "Example TikTok watchlist"
-    source_url: "https://www.tiktok.com/@example"
-    source_type: public_earned
-    access_basis: pending
-    authorization_status: pending
-    collection_method: import
-    enabled: false
-    priority: P0
-    crawl_frequency: daily
-    lookback_hours: 24
-    comment_policy:
-      mode: risk_based
-      max_comments_per_post: 100
-    privacy:
-      pii_policy: hash_author_id
-      quote_policy: paraphrase_by_default
-      retention_days: 90
-    owner:
-      business_owner: Comms
-      approved_by: Data owner
-
-  - id: threads_vsf_watchlist_001
-    platform: threads
-    source_kind: account
-    source_name: "Example Threads watchlist"
-    source_url: "https://www.threads.net/@example"
-    source_type: public_earned
-    access_basis: pending
-    authorization_status: pending
-    collection_method: import
-    enabled: false
-    priority: P0
-    crawl_frequency: daily
-    lookback_hours: 24
-    comment_policy:
-      mode: risk_based
-      max_comments_per_post: 100
-    privacy:
-      pii_policy: hash_author_id
-      quote_policy: paraphrase_by_default
-      retention_days: 90
-    owner:
-      business_owner: Comms
-      approved_by: Data owner
+      business_owner: Talent Radar
+      approved_by: workspace_user

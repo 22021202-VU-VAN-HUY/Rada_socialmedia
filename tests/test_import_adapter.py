@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 from sqlalchemy import create_engine, select
@@ -24,6 +25,54 @@ def test_load_import_file_accepts_csv_text_alias() -> None:
 
     assert records[0].content_text == "VSF deadline dang ky khi nao?"
     assert records[0].platform == "facebook"
+
+
+def test_load_import_file_accepts_coccoc_export(tmp_path: Path) -> None:
+    path = tmp_path / "facebook_coccoc.json"
+    path.write_text(
+        json.dumps(
+            {
+                "crawler": "coccoc-ui",
+                "source_id": "fb_group_laptrinhvienit",
+                "collected_at": "2026-07-23T10:00:00+07:00",
+                "posts": [
+                    {
+                        "post": {
+                            "external_id": "post_1",
+                            "author": "Anonymous",
+                            "content": "Sample post",
+                            "url": "https://www.facebook.com/groups/example/posts/post_1/",
+                        },
+                        "comments": [
+                            {
+                                "external_id": "comment_1",
+                                "parent_external_id": "post_1",
+                                "author": "Member",
+                                "content": "Sample comment",
+                                "is_reply": False,
+                            },
+                            {
+                                "external_id": "comment_2",
+                                "parent_external_id": "post_1",
+                                "author": "Member 2",
+                                "content": "",
+                                "is_reply": False,
+                            }
+                        ],
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    records = load_import_file(path)
+
+    assert [record.item_type for record in records] == ["post", "comment", "comment"]
+    assert records[1].parent_external_id == "post_1"
+    assert records[1].raw_metadata["author_display_name"] == "Member"
+    assert records[2].content_text == "[non-text comment]"
+    assert records[2].raw_metadata["non_text"] is True
 
 
 def test_run_import_batch_inserts_raw_and_normalized_items() -> None:
@@ -71,9 +120,9 @@ def test_run_import_batch_skips_duplicate_content() -> None:
     db = _session()
     db.add(
         Source(
-            id="threads_vsf_watchlist_001",
-            platform="threads",
-            source_name="Threads watchlist",
+            id="fb_group_laptrinhvienit",
+            platform="facebook",
+            source_name="Facebook group",
             authorization_status="approved",
             collection_method="import",
         )
@@ -83,9 +132,9 @@ def test_run_import_batch_skips_duplicate_content() -> None:
         import_batch_id="batch_test",
         records=[
             ImportRecord(
-                source_id="threads_vsf_watchlist_001",
-                platform="threads",
-                content_text="VinSmart Future workshop hay qua",
+                source_id="fb_group_laptrinhvienit",
+                platform="facebook",
+                content_text="Bai viet tu group Facebook",
                 external_id="post_1",
             )
         ],

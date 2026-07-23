@@ -24,8 +24,6 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg://talent_radar:talent_radar@db:5432/talent_radar
       SOURCE_REGISTRY_PATH: config/source_registry.example.yaml
-      QUERY_PACK_PATH: config/query_pack_vsf.yaml
-      AI_PROVIDER: rule
     ports:
       - "8000:8000"
     volumes:

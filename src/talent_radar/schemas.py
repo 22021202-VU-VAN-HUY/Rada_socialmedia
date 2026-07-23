@@ -4,7 +4,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field, model_validator
 
 
-Platform = Literal["facebook", "tiktok", "threads", "manual"]
+Platform = Literal["facebook", "manual"]
 
 
 class SourceBase(BaseModel):
@@ -35,39 +35,6 @@ class SourceRead(SourceBase):
     updated_at: datetime | None = None
 
     model_config = {"from_attributes": True}
-
-
-class Evidence(BaseModel):
-    item_id: str
-    source_id: str
-    platform: Platform
-    item_type: str
-    published_at: datetime | None = None
-    permalink: str | None = None
-    import_batch_id: str | None = None
-    quote_policy: str = "paraphrase_by_default"
-    safe_excerpt: str | None = None
-
-
-class ClassificationRequest(BaseModel):
-    text: str
-    item_id: str = "preview_item"
-    source_id: str = "preview_source"
-    platform: Platform = "manual"
-    item_type: str = "comment"
-    published_at: datetime | None = None
-    permalink: str | None = None
-    import_batch_id: str | None = None
-
-
-class ClassificationResult(BaseModel):
-    relevance: dict[str, Any]
-    sentiment: dict[str, Any]
-    voice: dict[str, Any]
-    risk: dict[str, Any]
-    recommendation: dict[str, Any]
-    evidence: Evidence
-    review_status: str
 
 
 class ImportRecord(BaseModel):
