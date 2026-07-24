@@ -4,7 +4,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field, model_validator
 
 
-Platform = Literal["facebook", "manual"]
+Platform = Literal["facebook", "tiktok", "threads", "manual"]
 
 
 class SourceBase(BaseModel):
@@ -76,3 +76,91 @@ class ImportBatchResult(BaseModel):
     skipped_duplicates: int
     raw_item_ids: list[str]
     normalized_item_ids: list[str]
+
+
+class UserCredentials(BaseModel):
+    email: str = Field(min_length=3, max_length=320)
+    password: str = Field(min_length=8, max_length=256)
+
+
+class UserRead(BaseModel):
+    id: str
+    email: str
+    is_active: bool
+    created_at: datetime | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class AuthResult(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    expires_at: datetime
+    user: UserRead
+
+
+class PlatformConnectionRead(BaseModel):
+    id: str
+    platform: str
+    status: str
+    auth_method: str
+    last_connected_at: datetime | None = None
+    last_checked_at: datetime | None = None
+    last_error: str | None = None
+    profile_directory: str | None = None
+    profile_name: str | None = None
+    profile_account_name: str | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class ConnectionActionResult(BaseModel):
+    connection: PlatformConnectionRead
+    message: str
+
+
+class ScheduleCreate(BaseModel):
+    connection_id: str
+    source_id: str
+    enabled: bool = True
+    interval_minutes: int = Field(default=60, ge=5, le=10080)
+    max_posts: int = Field(default=5, ge=1, le=200)
+
+
+class ScheduleUpdate(BaseModel):
+    enabled: bool | None = None
+    interval_minutes: int | None = Field(default=None, ge=5, le=10080)
+    max_posts: int | None = Field(default=None, ge=1, le=200)
+
+
+class ScheduleRead(BaseModel):
+    id: str
+    connection_id: str
+    source_id: str
+    enabled: bool
+    interval_minutes: int
+    max_posts: int
+    next_run_at: datetime | None = None
+    last_run_at: datetime | None = None
+    last_status: str
+    last_error: str | None = None
+    created_at: datetime | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class JobRead(BaseModel):
+    id: str
+    schedule_id: str
+    source_id: str
+    status: str
+    trigger: str
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    posts_collected: int
+    comments_collected: int
+    output_path: str | None = None
+    error_summary: str | None = None
+    created_at: datetime | None = None
+
+    model_config = {"from_attributes": True}
