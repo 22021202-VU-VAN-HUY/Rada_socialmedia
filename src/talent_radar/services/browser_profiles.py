@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-import socket
+import os
 import subprocess
 import time
 from dataclasses import dataclass
@@ -98,38 +98,14 @@ def launch_login_browser(
     settings: Settings,
     connection: PlatformConnection,
 ) -> PlatformConnection:
-    executable = settings.coccoc_executable_path.resolve()
-    if not executable.is_file():
-        raise BrowserProfileError(f"Khong tim thay Coc Coc tai {executable}")
-    if coccoc_is_running():
-        raise BrowserProfileError(
-            "Hay dong tat ca cua so Coc Coc, sau do bam Lien ket lai. "
-            "Talent Radar can tu mo profile Huy de kiem tra dang nhap."
-        )
-
     profile = selected_coccoc_profile(settings)
-    debug_port = _free_local_port()
-    process = subprocess.Popen(
-        [
-            str(executable),
-            f"--user-data-dir={profile.user_data_dir}",
-            f"--profile-directory={profile.directory}",
-            f"--remote-debugging-port={debug_port}",
-            "--remote-debugging-address=127.0.0.1",
-            "--no-first-run",
-            "--no-default-browser-check",
-            connection.login_url,
-        ],
-        start_new_session=True,
+    debug_port, process_id = ensure_controlled_coccoc(
+        settings,
+        connection.login_url,
     )
-    if not _wait_for_debug_port(debug_port):
-        raise BrowserProfileError(
-            "Coc Coc da mo nhung khong bat duoc kenh xac minh. "
-            "Hay dong Coc Coc va thu Lien ket lai."
-        )
 
     connection.status = "pending_login"
-    connection.browser_process_id = process.pid
+    connection.browser_process_id = process_id
     connection.last_error = None
     connection.connection_metadata = {
         **(connection.connection_metadata or {}),
@@ -140,6 +116,55 @@ def launch_login_browser(
     db.commit()
     db.refresh(connection)
     return connection
+
+
+def ensure_controlled_coccoc(
+    settings: Settings,
+    initial_url: str,
+    *,
+    minimized: bool = False,
+) -> tuple[int, int | None]:
+    executable = settings.coccoc_executable_path.resolve()
+    if not executable.is_file():
+        raise BrowserProfileError(f"Khong tim thay Coc Coc tai {executable}")
+    profile = selected_coccoc_profile(settings)
+    control_user_data_dir = Path(
+        os.path.abspath(settings.coccoc_control_user_data_directory)
+    )
+    if not (control_user_data_dir / profile.directory / "Preferences").is_file():
+        raise BrowserProfileError(
+            "Chua co junction profile Huy. Hay chay Open Talent Radar.cmd."
+        )
+    debug_port = settings.coccoc_remote_debugging_port
+
+    if _debug_port_available(debug_port):
+        _open_url_in_controlled_browser(debug_port, initial_url)
+        return debug_port, None
+    if coccoc_is_running():
+        raise BrowserProfileError(
+            "Coc Coc dang mo ngoai che do Talent Radar. Chi can dong Coc Coc mot lan, "
+            "sau do double-click Open Talent Radar.cmd; launcher se mo lai localhost "
+            "bang dung profile Huy va tu nhung lan sau khong can dong trinh duyet."
+        )
+
+    arguments = [
+        str(executable),
+        f"--user-data-dir={control_user_data_dir}",
+        f"--profile-directory={profile.directory}",
+        f"--remote-debugging-port={debug_port}",
+        "--remote-debugging-address=127.0.0.1",
+        "--no-first-run",
+        "--no-default-browser-check",
+    ]
+    if minimized:
+        arguments.append("--start-minimized")
+    arguments.append(initial_url)
+    process = subprocess.Popen(arguments, start_new_session=True)
+    if not _wait_for_debug_port(debug_port):
+        raise BrowserProfileError(
+            "Coc Coc da mo nhung khong bat duoc kenh local cua Talent Radar."
+        )
+    return debug_port, process.pid
 
 
 def verify_platform_login(
@@ -266,6 +291,25 @@ def coccoc_is_running() -> bool:
     return '"browser.exe"' in result.stdout.casefold()
 
 
+def _open_url_in_controlled_browser(port: int, url: str) -> None:
+    try:
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.connect_over_cdp(
+                f"http://127.0.0.1:{port}"
+            )
+            if not browser.contexts:
+                raise BrowserProfileError("Coc Coc khong co browser context.")
+            browser.contexts[0].new_page().goto(
+                url,
+                wait_until="domcontentloaded",
+                timeout=30_000,
+            )
+    except PlaywrightError as exc:
+        raise BrowserProfileError(
+            "Khong mo duoc tab moi trong Coc Coc cua Talent Radar."
+        ) from exc
+
+
 def _profile_metadata(profile: CocCocProfile) -> dict:
     return {
         "profile_source": "existing_coccoc",
@@ -273,12 +317,6 @@ def _profile_metadata(profile: CocCocProfile) -> dict:
         "profile_name": profile.profile_name,
         "profile_account_name": profile.account_name,
     }
-
-
-def _free_local_port() -> int:
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server:
-        server.bind(("127.0.0.1", 0))
-        return int(server.getsockname()[1])
 
 
 def _wait_for_debug_port(port: int, timeout_seconds: float = 12) -> bool:
