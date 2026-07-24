@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from talent_radar.core.config import Settings
 from talent_radar.models import (
     CollectionJob,
+    CollectionSchedule,
     PlatformConnection,
     RawItem,
     Source,
@@ -18,6 +19,7 @@ from talent_radar.services.collection import (
     CollectionServiceError,
     create_schedule,
     delete_schedule,
+    enqueue_default_facebook_group_job,
     enqueue_due_schedules,
     enqueue_job,
     run_job,
@@ -82,6 +84,28 @@ def test_due_schedule_is_enqueued_only_once(db: Session) -> None:
     assert enqueue_due_schedules(db) == 1
     assert enqueue_due_schedules(db) == 0
     assert len(db.scalars(select(CollectionJob)).all()) == 1
+
+
+def test_default_facebook_group_action_creates_one_manual_background_job(
+    db: Session,
+) -> None:
+    user = register_user(db, "one-click@example.com", "correct-horse-2026")
+    source, _connection = add_source_and_connection(db, user.id, suffix="one_click")
+
+    first = enqueue_default_facebook_group_job(db, user)
+    second = enqueue_default_facebook_group_job(db, user)
+
+    schedule = db.scalar(
+        select(CollectionSchedule).where(CollectionSchedule.id == first.schedule_id)
+    )
+    assert first.id == second.id
+    assert first.status == "queued"
+    assert first.trigger == "manual"
+    assert first.source_id == source.id
+    assert schedule is not None
+    assert schedule.enabled is False
+    assert schedule.interval_minutes == 1440
+    assert schedule.max_posts == 50
 
 
 def test_delete_schedule_preserves_job_history(db: Session) -> None:
