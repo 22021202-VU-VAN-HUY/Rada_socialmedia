@@ -119,6 +119,63 @@ def enqueue_job(
     return job
 
 
+def enqueue_default_facebook_group_job(
+    db: Session,
+    user: User,
+    *,
+    max_posts: int = 50,
+) -> CollectionJob:
+    connection = db.scalar(
+        select(PlatformConnection)
+        .where(
+            PlatformConnection.user_id == user.id,
+            PlatformConnection.platform == "facebook",
+            PlatformConnection.status == "connected",
+        )
+        .order_by(PlatformConnection.last_connected_at.desc())
+    )
+    if connection is None:
+        raise CollectionServiceError("Hay lien ket Facebook truoc khi lay du lieu.")
+
+    source = db.scalar(
+        select(Source)
+        .where(
+            Source.platform == "facebook",
+            Source.source_kind == "group",
+            Source.enabled.is_(True),
+        )
+        .order_by(Source.priority, Source.created_at)
+    )
+    if source is None:
+        raise CollectionServiceError(
+            "Khong tim thay Facebook group dang bat trong source registry."
+        )
+
+    schedule = db.scalar(
+        select(CollectionSchedule)
+        .where(
+            CollectionSchedule.user_id == user.id,
+            CollectionSchedule.connection_id == connection.id,
+            CollectionSchedule.source_id == source.id,
+            CollectionSchedule.last_status != "deleted",
+        )
+        .order_by(CollectionSchedule.created_at.desc())
+    )
+    if schedule is None:
+        schedule = create_schedule(
+            db,
+            user,
+            ScheduleCreate(
+                connection_id=connection.id,
+                source_id=source.id,
+                enabled=False,
+                interval_minutes=1440,
+                max_posts=max_posts,
+            ),
+        )
+    return enqueue_job(db, user, schedule.id, trigger="manual")
+
+
 def enqueue_due_schedules(db: Session) -> int:
     now = datetime.now(UTC)
     count = 0
