@@ -52,9 +52,6 @@ This starts the API and worker as hidden processes, then opens
 `http://localhost:8501` in Coc Coc `Default` for Vũ Văn Huy. VSCode's browser is
 not used.
 
-The launcher creates `data/coccoc_huy_user_data` as a Windows junction to the real
-Coc Coc User Data directory. It does not copy or create another browser user.
-
 The PowerShell equivalent is:
 
 ```powershell
@@ -74,18 +71,14 @@ Runtime logs and PID files are stored under `data/runtime`.
 
 ## Connect Facebook
 
-1. For the first migration only, close Coc Coc and double-click
-   `Open Talent Radar.cmd`. Later sessions can keep this Coc Coc window open.
-2. Open Settings and select **Lien ket** for Facebook.
-3. Confirm that Settings shows `Vũ Văn Huy (Default)`.
-4. Sign in to Facebook in the new tab and keep Coc Coc open.
-5. Return to the Talent Radar tab and select **Xac nhan**.
-6. Talent Radar opens `/me` in a temporary background tab and accepts the connection only when
-   Facebook does not redirect to login or checkpoint.
+1. Open Settings and select **Lien ket** for Facebook.
+2. Coc Coc opens `facebook.com/me` in a new tab under `Vũ Văn Huy (Default)`.
+3. Sign in when Facebook requests it.
+4. Return to Talent Radar. Connection status updates automatically after Facebook
+   redirects the tab to the signed-in profile.
 
 The collector reuses Huy's existing profile. It does not read or export cookies,
-passwords, or saved credentials. The collector attaches to the same launcher-managed
-Coc Coc, so localhost can stay open during collection.
+passwords, or saved credentials.
 
 ## Run At Windows Logon
 
