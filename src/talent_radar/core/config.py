@@ -31,6 +31,14 @@ class Settings(BaseSettings):
     background_worker_enabled: bool = True
     background_poll_seconds: int = 15
 
+    facebook_app_id: str = ""
+    facebook_app_secret: str = ""
+    facebook_redirect_uri: str = (
+        "http://localhost:8000/connections/facebook/callback"
+    )
+    facebook_graph_api_version: str = "v20.0"
+    facebook_scopes: str = "public_profile"
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
 
