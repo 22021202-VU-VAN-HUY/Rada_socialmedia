@@ -393,7 +393,11 @@ def run_default_facebook_group_now(
     source_data = load_source_registry(settings.source_registry_path)
     upsert_sources(db, source_data)
     try:
-        return enqueue_default_facebook_group_job(db, user)
+        return enqueue_default_facebook_group_job(
+            db,
+            user,
+            max_posts=settings.crawl_max_posts_per_source,
+        )
     except CollectionServiceError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
