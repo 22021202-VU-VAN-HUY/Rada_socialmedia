@@ -54,6 +54,7 @@ from talent_radar.services.collection import (
     CollectionServiceError,
     create_schedule as create_collection_schedule,
     delete_schedule as delete_collection_schedule,
+    enqueue_default_facebook_group_job,
     enqueue_job,
     update_schedule as update_collection_schedule,
 )
@@ -380,6 +381,19 @@ def run_schedule_now(
 ) -> CollectionJob:
     try:
         return enqueue_job(db, user, schedule_id)
+    except CollectionServiceError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/collection/facebook/run-now", response_model=JobRead)
+def run_default_facebook_group_now(
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> CollectionJob:
+    source_data = load_source_registry(settings.source_registry_path)
+    upsert_sources(db, source_data)
+    try:
+        return enqueue_default_facebook_group_job(db, user)
     except CollectionServiceError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
