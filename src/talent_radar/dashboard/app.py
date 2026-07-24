@@ -22,6 +22,7 @@ PLATFORM_LABELS = {
 STATUS_LABELS = {
     "disconnected": "Chua ket noi",
     "pending_login": "Dang cho dang nhap",
+    "pending_authorization": "Dang cho cap quyen Facebook",
     "connected": "Da ket noi",
     "reauth_required": "Can dang nhap lai",
     "error": "Co loi",
@@ -279,7 +280,9 @@ def platform_actions(connection: dict[str, Any]) -> None:
         with info:
             st.subheader(label)
             st.caption(STATUS_LABELS.get(status, status))
-            if connection.get("profile_account_name"):
+            if connection.get("connected_account_name"):
+                st.caption(f"Facebook: {connection['connected_account_name']}")
+            elif connection.get("profile_account_name") and platform != "facebook":
                 st.caption(
                     f"Coc Coc: {connection['profile_account_name']} "
                     f"({connection.get('profile_directory')})"
@@ -297,16 +300,16 @@ def platform_actions(connection: dict[str, Any]) -> None:
                     width="stretch",
                 ):
                     run_connection_action(platform, "connect")
-            elif status == "pending_login":
+            elif status in {"pending_login", "pending_authorization"}:
                 if st.button(
-                    "Mo Facebook",
+                    "Mo lai Facebook",
                     key=f"reopen_{platform}",
                     type="primary",
                     icon=":material/open_in_new:",
                     width="stretch",
                 ):
                     run_connection_action(platform, "connect")
-            if status in {"connected", "pending_login"}:
+            if status in {"connected", "pending_login", "pending_authorization"}:
                 if st.button(
                     "Ngat ket noi",
                     key=f"disconnect_{platform}",
