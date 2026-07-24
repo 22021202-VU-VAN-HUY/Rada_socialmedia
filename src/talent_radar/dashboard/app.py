@@ -260,7 +260,6 @@ def render_data(view: str) -> None:
     )
 
 
-@st.fragment(run_every=3)
 def render_post_collection_action() -> None:
     try:
         jobs = api_request("GET", "/jobs")
@@ -269,21 +268,6 @@ def render_post_collection_action() -> None:
         return
     latest = jobs[0] if jobs else None
     active = latest is not None and latest["status"] in {"queued", "running"}
-    signature = (
-        (latest["id"], latest["status"])
-        if latest is not None
-        else None
-    )
-    previous = st.session_state.get("post_collection_job_signature")
-    st.session_state.post_collection_job_signature = signature
-    if (
-        previous is not None
-        and previous != signature
-        and latest is not None
-        and latest["status"] in {"completed", "failed"}
-    ):
-        st.rerun()
-
     if st.button(
         "Thuc hien lay du lieu",
         key="collect_facebook_posts",
@@ -294,10 +278,6 @@ def render_post_collection_action() -> None:
     ):
         try:
             job = api_request("POST", "/collection/facebook/run-now")
-            st.session_state.post_collection_job_signature = (
-                job["id"],
-                job["status"],
-            )
             st.toast("Da dua tac vu lay du lieu vao nen.")
             st.rerun()
         except ApiError as exc:
@@ -305,6 +285,13 @@ def render_post_collection_action() -> None:
     if active:
         status = "Dang cho worker" if latest["status"] == "queued" else "Dang lay du lieu"
         st.caption(status)
+    elif latest is not None and latest["status"] == "completed":
+        st.caption(
+            f"Lan gan nhat: {latest['posts_collected']} bai viet, "
+            f"{latest['comments_collected']} binh luan."
+        )
+    elif latest is not None and latest["status"] == "failed":
+        st.error(f"Lan gan nhat that bai: {latest['error_summary']}")
 
 
 def render_runs() -> None:
@@ -382,18 +369,12 @@ def run_connection_action(platform: str, action: str) -> None:
         st.error(str(exc))
 
 
-@st.fragment(run_every=3)
 def render_platform_connections() -> None:
     try:
         connections = api_request("GET", "/connections")
     except ApiError as exc:
         st.error(str(exc))
         return
-    signature = tuple((item["platform"], item["status"]) for item in connections)
-    previous = st.session_state.get("connection_status_signature")
-    st.session_state.connection_status_signature = signature
-    if previous is not None and previous != signature:
-        st.rerun()
     for connection in connections:
         platform_actions(connection)
 
