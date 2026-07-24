@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 from datetime import UTC, datetime, timedelta
+from typing import Callable
 from urllib.parse import urlsplit, urlunsplit
 from zoneinfo import ZoneInfo
 
@@ -34,6 +35,7 @@ class FacebookCollector:
         max_posts: int,
         *,
         since: datetime | None = None,
+        on_progress: Callable[[dict], None] | None = None,
     ) -> dict:
         if not source.source_url:
             raise CollectionError("Nguon chua co URL.")
@@ -68,6 +70,25 @@ class FacebookCollector:
                 posts = []
                 failures = []
                 consecutive_old_posts = 0
+
+                def payload() -> dict:
+                    return {
+                        "crawler": "coccoc-playwright",
+                        "collected_at": datetime.now(UTC).isoformat(),
+                        "since": since.isoformat() if since is not None else None,
+                        "source_id": source.id,
+                        "source_group_url": source.source_url
+                        if "/groups/" in source.source_url
+                        and "/posts/" not in source.source_url
+                        else None,
+                        "source_post_url": source.source_url
+                        if "/posts/" in source.source_url
+                        or "/permalink/" in source.source_url
+                        else None,
+                        "posts": posts,
+                        "failures": failures,
+                    }
+
                 for url in urls:
                     try:
                         item = self._collect_post(page, url)
@@ -97,24 +118,13 @@ class FacebookCollector:
                             continue
                         consecutive_old_posts = 0
                         posts.append(item)
+                        if on_progress is not None:
+                            on_progress(payload())
                     except CollectionError as exc:
                         failures.append({"url": url, "error": str(exc)})
                 if not posts and failures:
                     raise CollectionError(failures[0]["error"])
-                return {
-                    "crawler": "coccoc-playwright",
-                    "collected_at": datetime.now(UTC).isoformat(),
-                    "since": since.isoformat() if since is not None else None,
-                    "source_id": source.id,
-                    "source_group_url": source.source_url
-                    if "/groups/" in source.source_url and "/posts/" not in source.source_url
-                    else None,
-                    "source_post_url": source.source_url
-                    if "/posts/" in source.source_url or "/permalink/" in source.source_url
-                    else None,
-                    "posts": posts,
-                    "failures": failures,
-                }
+                return payload()
             finally:
                 page.close()
 
