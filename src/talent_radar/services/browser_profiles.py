@@ -98,20 +98,32 @@ def launch_login_browser(
     settings: Settings,
     connection: PlatformConnection,
 ) -> PlatformConnection:
+    executable = settings.coccoc_executable_path.resolve()
+    if not executable.is_file():
+        raise BrowserProfileError(f"Khong tim thay Coc Coc tai {executable}")
     profile = selected_coccoc_profile(settings)
-    debug_port, process_id = ensure_controlled_coccoc(
-        settings,
-        connection.login_url,
+    target_url = (
+        "https://www.facebook.com/me"
+        if connection.platform == "facebook"
+        else connection.login_url
+    )
+    process = subprocess.Popen(
+        [
+            str(executable),
+            f"--profile-directory={profile.directory}",
+            target_url,
+        ],
+        start_new_session=True,
     )
 
     connection.status = "pending_login"
-    connection.browser_process_id = process_id
+    connection.browser_process_id = process.pid
     connection.last_error = None
     connection.connection_metadata = {
         **(connection.connection_metadata or {}),
         **_profile_metadata(profile),
-        "debug_port": debug_port,
         "login_verified": False,
+        "login_check": "coccoc_address_bar",
     }
     db.commit()
     db.refresh(connection)
