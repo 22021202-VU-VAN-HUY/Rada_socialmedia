@@ -97,7 +97,13 @@ def connection_for_platform(
     return connection
 
 
-def launch_coccoc_url(settings: Settings, url: str) -> int:
+def launch_coccoc_url(settings: Settings, url: str) -> int | None:
+    if _debug_port_available(settings.coccoc_remote_debugging_port):
+        _open_url_in_controlled_browser(
+            settings.coccoc_remote_debugging_port,
+            url,
+        )
+        return None
     executable = settings.coccoc_executable_path.resolve()
     if not executable.is_file():
         raise BrowserProfileError(f"Khong tim thay Coc Coc tai {executable}")
@@ -165,7 +171,7 @@ def ensure_controlled_coccoc(
     )
     if not (control_user_data_dir / profile.directory / "Preferences").is_file():
         raise BrowserProfileError(
-            "Chua co junction profile Huy. Hay chay Open Talent Radar.cmd."
+            "Khong tim thay profile Coc Coc Huy cho collector."
         )
     debug_port = settings.coccoc_remote_debugging_port
 
@@ -174,9 +180,7 @@ def ensure_controlled_coccoc(
         return debug_port, None
     if coccoc_is_running():
         raise BrowserProfileError(
-            "Coc Coc dang mo ngoai che do Talent Radar. Chi can dong Coc Coc mot lan, "
-            "sau do double-click Open Talent Radar.cmd; launcher se mo lai localhost "
-            "bang dung profile Huy va tu nhung lan sau khong can dong trinh duyet."
+            "Coc Coc Huy dang mo nhung chua co kenh collector noi bo."
         )
 
     arguments = [
