@@ -86,7 +86,6 @@ def api_request(method: str, path: str, *, auth: bool = True, **kwargs: Any) -> 
     return response.json()
 
 
-@st.cache_data(show_spinner=False)
 def load_export(path: Path) -> dict[str, Any]:
     with path.open("r", encoding="utf-8-sig") as handle:
         return json.load(handle)
@@ -235,6 +234,18 @@ def render_data(view: str) -> None:
             render_post_collection_action()
     else:
         st.title("Binh luan")
+    if view == "Posts":
+        render_live_post_rows()
+    else:
+        render_export_rows(view)
+
+
+@st.fragment(run_every=2)
+def render_live_post_rows() -> None:
+    render_export_rows("Posts")
+
+
+def render_export_rows(view: str) -> None:
     payload, _ = selected_export()
     if payload is None:
         st.info("Chua co export Facebook trong data/exports.")
