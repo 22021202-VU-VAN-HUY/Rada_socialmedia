@@ -227,7 +227,14 @@ def render_overview() -> None:
 
 
 def render_data(view: str) -> None:
-    st.title("Bai viet" if view == "Posts" else "Binh luan")
+    if view == "Posts":
+        heading, action = st.columns([3, 2], vertical_alignment="center")
+        with heading:
+            st.title("Bai viet")
+        with action:
+            render_post_collection_action()
+    else:
+        st.title("Binh luan")
     payload, _ = selected_export()
     if payload is None:
         st.info("Chua co export Facebook trong data/exports.")
@@ -251,6 +258,53 @@ def render_data(view: str) -> None:
             "content": st.column_config.TextColumn("content", width="large"),
         },
     )
+
+
+@st.fragment(run_every=3)
+def render_post_collection_action() -> None:
+    try:
+        jobs = api_request("GET", "/jobs")
+    except ApiError as exc:
+        st.error(str(exc))
+        return
+    latest = jobs[0] if jobs else None
+    active = latest is not None and latest["status"] in {"queued", "running"}
+    signature = (
+        (latest["id"], latest["status"])
+        if latest is not None
+        else None
+    )
+    previous = st.session_state.get("post_collection_job_signature")
+    st.session_state.post_collection_job_signature = signature
+    if (
+        previous is not None
+        and previous != signature
+        and latest is not None
+        and latest["status"] in {"completed", "failed"}
+    ):
+        st.rerun()
+
+    if st.button(
+        "Thuc hien lay du lieu",
+        key="collect_facebook_posts",
+        type="primary",
+        icon=":material/download:",
+        disabled=active,
+        width="stretch",
+    ):
+        try:
+            job = api_request("POST", "/collection/facebook/run-now")
+            st.session_state.post_collection_job_signature = (
+                job["id"],
+                job["status"],
+            )
+            st.toast("Da dua tac vu lay du lieu vao nen.")
+            st.rerun()
+        except ApiError as exc:
+            st.error(str(exc))
+    if active:
+        status = "Dang cho worker" if latest["status"] == "queued" else "Dang lay du lieu"
+        st.caption(status)
 
 
 def render_runs() -> None:
