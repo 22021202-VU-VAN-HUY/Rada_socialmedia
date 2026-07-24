@@ -21,7 +21,7 @@ PLATFORM_LABELS = {
 }
 STATUS_LABELS = {
     "disconnected": "Chua ket noi",
-    "pending_login": "Cho xac nhan",
+    "pending_login": "Dang cho dang nhap",
     "connected": "Da ket noi",
     "reauth_required": "Can dang nhap lai",
     "error": "Co loi",
@@ -299,13 +299,13 @@ def platform_actions(connection: dict[str, Any]) -> None:
                     run_connection_action(platform, "connect")
             elif status == "pending_login":
                 if st.button(
-                    "Xac nhan",
-                    key=f"confirm_{platform}",
+                    "Mo Facebook",
+                    key=f"reopen_{platform}",
                     type="primary",
-                    icon=":material/check:",
+                    icon=":material/open_in_new:",
                     width="stretch",
                 ):
-                    run_connection_action(platform, "confirm")
+                    run_connection_action(platform, "connect")
             if status in {"connected", "pending_login"}:
                 if st.button(
                     "Ngat ket noi",
@@ -323,6 +323,22 @@ def run_connection_action(platform: str, action: str) -> None:
         st.rerun()
     except ApiError as exc:
         st.error(str(exc))
+
+
+@st.fragment(run_every=3)
+def render_platform_connections() -> None:
+    try:
+        connections = api_request("GET", "/connections")
+    except ApiError as exc:
+        st.error(str(exc))
+        return
+    signature = tuple((item["platform"], item["status"]) for item in connections)
+    previous = st.session_state.get("connection_status_signature")
+    st.session_state.connection_status_signature = signature
+    if previous is not None and previous != signature:
+        st.rerun()
+    for connection in connections:
+        platform_actions(connection)
 
 
 def render_schedule_form(
@@ -451,12 +467,7 @@ def render_settings() -> None:
         st.error(str(exc))
         return
     st.subheader("Nen tang")
-    st.caption(
-        "Mo app bang Open Talent Radar.cmd de localhost va Facebook dung chung Coc Coc "
-        "Huy (Default). Co the giu trinh duyet mo khi Lien ket va chay collector."
-    )
-    for connection in connections:
-        platform_actions(connection)
+    render_platform_connections()
     st.divider()
     schedule_column, list_column = st.columns([2, 3])
     with schedule_column:
