@@ -14,7 +14,8 @@ scope.
 - Local accounts with scrypt password hashes and revocable opaque sessions.
 - Per-user Facebook, TikTok, and Threads connection records.
 - Existing Coc Coc profile selection, currently `Default` for Vũ Văn Huy.
-- Active Facebook login verification before a connection can become connected.
+- Official Facebook OAuth authorization with one-time state, server-side code
+  exchange, `/me` verification, and DPAPI-protected token storage.
 - Playwright Facebook collection without SendKeys, clipboard access, or foreground
   keyboard/mouse control.
 - Per-source schedules, Run now, job history, error state, and reauthentication state.
@@ -49,11 +50,11 @@ scope.
 
 ## Operational Rules
 
-- A platform uses the configured existing Coc Coc profile.
-- Connect opens `facebook.com/me` as a normal tab in Coc Coc `Default`.
-- A Windows UI Automation monitor reads only the active Coc Coc address bar and
-  marks the connection after Facebook redirects to the signed-in profile.
-- Login and checkpoint URLs never become connected.
+- Coc Coc `Default` is used to open platform authorization pages.
+- Facebook Connect opens Meta's OAuth permission screen, not `facebook.com/me`.
+- OAuth state expires after ten minutes and can be consumed only once.
+- Facebook becomes connected only after the callback exchanges the code and verifies
+  the Facebook account through Graph API `/me`.
 - Settings refreshes connection state automatically and has no manual Confirm step.
 - A disconnected connection disables its schedules but preserves the profile.
 - Deleting a schedule is a soft delete so collection history remains traceable.
@@ -71,7 +72,8 @@ scope.
 
 - Accounts cannot access another account's connections, schedules, or jobs.
 - Passwords and bearer tokens are never stored in plaintext.
-- Facebook login is verified and persists in the selected existing profile.
+- Facebook authorization is verified by OAuth callback; access tokens are never
+  stored in plaintext.
 - A due schedule produces one job, one export, and imported records.
 - Login expiry changes the connection to `reauth_required`.
 - The dashboard reports queued, running, completed, failed, and disconnected states.
