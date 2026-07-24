@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, JSON, String, Text, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, JSON, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from talent_radar.core.database import Base
@@ -11,6 +11,77 @@ class TimestampMixin:
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
+
+
+class User(TimestampMixin, Base):
+    __tablename__ = "users"
+
+    id: Mapped[str] = mapped_column(String(120), primary_key=True)
+    email: Mapped[str] = mapped_column(String(320), unique=True, index=True)
+    password_hash: Mapped[str] = mapped_column(Text)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
+class AuthSession(TimestampMixin, Base):
+    __tablename__ = "auth_sessions"
+
+    id: Mapped[str] = mapped_column(String(120), primary_key=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class PlatformConnection(TimestampMixin, Base):
+    __tablename__ = "platform_connections"
+    __table_args__ = (UniqueConstraint("user_id", "platform", name="uq_connection_user_platform"),)
+
+    id: Mapped[str] = mapped_column(String(120), primary_key=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+    platform: Mapped[str] = mapped_column(String(40), index=True)
+    status: Mapped[str] = mapped_column(String(40), default="disconnected", index=True)
+    auth_method: Mapped[str] = mapped_column(String(40), default="browser_profile")
+    profile_dir: Mapped[str] = mapped_column(Text)
+    login_url: Mapped[str] = mapped_column(Text)
+    browser_process_id: Mapped[int | None] = mapped_column(Integer)
+    last_connected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_error: Mapped[str | None] = mapped_column(Text)
+    connection_metadata: Mapped[dict] = mapped_column(JSON, default=dict)
+
+
+class CollectionSchedule(TimestampMixin, Base):
+    __tablename__ = "collection_schedules"
+
+    id: Mapped[str] = mapped_column(String(120), primary_key=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+    connection_id: Mapped[str] = mapped_column(ForeignKey("platform_connections.id"), index=True)
+    source_id: Mapped[str] = mapped_column(ForeignKey("sources.id"), index=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    interval_minutes: Mapped[int] = mapped_column(Integer, default=60)
+    max_posts: Mapped[int] = mapped_column(Integer, default=5)
+    next_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
+    last_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_status: Mapped[str] = mapped_column(String(40), default="never")
+    last_error: Mapped[str | None] = mapped_column(Text)
+
+
+class CollectionJob(TimestampMixin, Base):
+    __tablename__ = "collection_jobs"
+
+    id: Mapped[str] = mapped_column(String(120), primary_key=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+    schedule_id: Mapped[str] = mapped_column(ForeignKey("collection_schedules.id"), index=True)
+    connection_id: Mapped[str] = mapped_column(ForeignKey("platform_connections.id"), index=True)
+    source_id: Mapped[str] = mapped_column(ForeignKey("sources.id"), index=True)
+    status: Mapped[str] = mapped_column(String(40), default="queued", index=True)
+    trigger: Mapped[str] = mapped_column(String(40), default="scheduled")
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    posts_collected: Mapped[int] = mapped_column(Integer, default=0)
+    comments_collected: Mapped[int] = mapped_column(Integer, default=0)
+    output_path: Mapped[str | None] = mapped_column(Text)
+    error_summary: Mapped[str | None] = mapped_column(Text)
 
 
 class Source(TimestampMixin, Base):
