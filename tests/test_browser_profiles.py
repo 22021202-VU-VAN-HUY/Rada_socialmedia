@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from talent_radar.core.config import Settings
 from talent_radar.models import PlatformConnection
 from talent_radar.services.browser_profiles import (
+    launch_coccoc_url,
     launch_login_browser,
     selected_coccoc_profile,
     verify_platform_login,
@@ -101,6 +102,34 @@ def test_login_browser_does_not_require_managed_coccoc(
 
     popen.assert_called_once()
     assert updated.status == "pending_login"
+
+
+def test_oauth_url_reuses_controlled_huy_coccoc(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    settings = fake_coccoc_settings(tmp_path)
+    settings.coccoc_remote_debugging_port = 9223
+    opened = Mock()
+    popen = Mock()
+    monkeypatch.setattr(
+        "talent_radar.services.browser_profiles._debug_port_available",
+        lambda port: port == 9223,
+    )
+    monkeypatch.setattr(
+        "talent_radar.services.browser_profiles._open_url_in_controlled_browser",
+        opened,
+    )
+    monkeypatch.setattr(
+        "talent_radar.services.browser_profiles.subprocess.Popen",
+        popen,
+    )
+
+    process_id = launch_coccoc_url(settings, "https://facebook.example/oauth")
+
+    assert process_id is None
+    opened.assert_called_once_with(9223, "https://facebook.example/oauth")
+    popen.assert_not_called()
 
 
 class FakeLocator:
