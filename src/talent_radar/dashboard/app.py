@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -9,6 +10,7 @@ import requests
 import streamlit as st
 
 from talent_radar.core.config import get_settings
+from talent_radar.dashboard.formatting import relative_published
 
 
 settings = get_settings()
@@ -97,7 +99,11 @@ def export_files() -> list[Path]:
     return sorted(files, reverse=True)
 
 
-def post_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
+def post_rows(
+    payload: dict[str, Any],
+    *,
+    published_reference: datetime | None = None,
+) -> list[dict[str, Any]]:
     rows = []
     for item in payload.get("posts", []):
         post = item.get("post", {})
@@ -106,6 +112,10 @@ def post_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
                 "post_id": post.get("external_id"),
                 "author": post.get("author"),
                 "group": post.get("group"),
+                "published": relative_published(
+                    post,
+                    published_reference or datetime.now(UTC),
+                ),
                 "content": post.get("content"),
                 "reactions": post.get("reaction_count", 0),
                 "comments": post.get("collected_comment_count", 0),
@@ -227,11 +237,27 @@ def render_overview() -> None:
 
 def render_data(view: str) -> None:
     if view == "Posts":
+        st.session_state.setdefault(
+            "post_published_reference",
+            datetime.now(UTC),
+        )
         heading, action = st.columns([3, 2], vertical_alignment="center")
         with heading:
             st.title("Bai viet")
         with action:
-            render_post_collection_action()
+            sync, collect = st.columns([0.6, 4], vertical_alignment="center")
+            with sync:
+                if st.button(
+                    " ",
+                    key="sync_post_rows",
+                    icon=":material/sync:",
+                    help="Cap nhat thoi gian dang",
+                    width="stretch",
+                ):
+                    st.session_state.post_published_reference = datetime.now(UTC)
+                    st.rerun()
+            with collect:
+                render_post_collection_action()
     else:
         st.title("Binh luan")
     if view == "Posts":
@@ -250,7 +276,17 @@ def render_export_rows(view: str) -> None:
     if payload is None:
         st.info("Chua co export Facebook trong data/exports.")
         return
-    rows = post_rows(payload) if view == "Posts" else comment_rows(payload)
+    rows = (
+        post_rows(
+            payload,
+            published_reference=st.session_state.get(
+                "post_published_reference",
+                datetime.now(UTC),
+            ),
+        )
+        if view == "Posts"
+        else comment_rows(payload)
+    )
     if not rows:
         st.info("Lan thu thap nay khong co du lieu.")
         return
