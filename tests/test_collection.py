@@ -1,3 +1,4 @@
+import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -141,9 +142,10 @@ def test_facebook_job_writes_export_and_imports_records(
         ScheduleCreate(connection_id=connection.id, source_id=source.id),
     )
     job = enqueue_job(db, user, schedule.id)
+    progress_snapshots = []
 
-    def fake_collect(*_args, **_kwargs):
-        return {
+    def fake_collect(*_args, **kwargs):
+        payload = {
             "crawler": "coccoc-playwright",
             "collected_at": datetime.now(UTC).isoformat(),
             "source_id": source.id,
@@ -168,6 +170,12 @@ def test_facebook_job_writes_export_and_imports_records(
             ],
             "failures": [],
         }
+        kwargs["on_progress"](payload)
+        progress_file = next(tmp_path.glob("facebook_playwright_*.json"))
+        progress_snapshots.append(
+            json.loads(progress_file.read_text(encoding="utf-8"))
+        )
+        return payload
 
     monkeypatch.setattr(
         "talent_radar.services.collection.FacebookCollector.collect",
@@ -187,4 +195,6 @@ def test_facebook_job_writes_export_and_imports_records(
     assert job.comments_collected == 1
     assert job.output_path is not None
     assert Path(job.output_path).is_file()
+    assert len(progress_snapshots) == 1
+    assert len(progress_snapshots[0]["posts"]) == 1
     assert len(db.scalars(select(RawItem)).all()) == 2
