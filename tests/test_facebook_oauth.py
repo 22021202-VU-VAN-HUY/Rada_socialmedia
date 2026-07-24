@@ -1,4 +1,7 @@
+import base64
+import sys
 from datetime import UTC, datetime
+from types import SimpleNamespace
 from urllib.parse import parse_qs, urlparse
 
 from sqlalchemy.orm import Session
@@ -121,3 +124,16 @@ def test_callback_marks_connection_only_after_token_and_profile_verification(
     )
     assert oauth_state.used_at is not None
     assert oauth_state.used_at.replace(tzinfo=UTC) <= datetime.now(UTC)
+
+
+def test_protect_token_accepts_dpapi_bytes_result(monkeypatch) -> None:
+    encrypted = b"windows-dpapi-result"
+    fake_win32crypt = SimpleNamespace(
+        CryptProtectData=lambda *_args: encrypted,
+    )
+    monkeypatch.setattr(facebook_oauth.os, "name", "nt")
+    monkeypatch.setitem(sys.modules, "win32crypt", fake_win32crypt)
+
+    protected = facebook_oauth._protect_token("facebook-token")
+
+    assert base64.b64decode(protected) == encrypted
