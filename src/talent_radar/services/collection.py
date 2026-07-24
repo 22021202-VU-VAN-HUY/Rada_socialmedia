@@ -254,13 +254,30 @@ def run_job(db: Session, settings: Settings, job: CollectionJob) -> None:
             ).astimezone(UTC)
         else:
             since = datetime.now(UTC) - timedelta(hours=source.lookback_hours)
+        output_path = _new_export_path(
+            settings.crawl_output_directory,
+            job.id,
+        )
+        job.output_path = str(output_path)
+        db.commit()
+
+        def persist_progress(progress: dict) -> None:
+            _write_export(output_path, progress)
+            job.posts_collected = len(progress.get("posts", []))
+            job.comments_collected = sum(
+                len(item.get("comments", []))
+                for item in progress.get("posts", [])
+            )
+            db.commit()
+
         payload = FacebookCollector(settings).collect(
             connection,
             source,
             schedule.max_posts,
             since=since,
+            on_progress=persist_progress,
         )
-        output_path = _write_export(settings.crawl_output_directory, payload, job.id)
+        _write_export(output_path, payload)
         records = load_import_file(output_path)
         run_import_batch(
             db,
@@ -289,13 +306,17 @@ def run_job(db: Session, settings: Settings, job: CollectionJob) -> None:
         _fail_job(db, job, schedule, str(exc))
 
 
-def _write_export(directory: Path, payload: dict, job_id: str) -> Path:
+def _new_export_path(directory: Path, job_id: str) -> Path:
     directory.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
-    path = directory / f"facebook_playwright_{timestamp}_{job_id[-8:]}.json"
-    with path.open("w", encoding="utf-8") as handle:
+    return directory / f"facebook_playwright_{timestamp}_{job_id[-8:]}.json"
+
+
+def _write_export(path: Path, payload: dict) -> None:
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    with temporary.open("w", encoding="utf-8") as handle:
         json.dump(payload, handle, ensure_ascii=False, indent=2)
-    return path
+    temporary.replace(path)
 
 
 def _fail_job(
