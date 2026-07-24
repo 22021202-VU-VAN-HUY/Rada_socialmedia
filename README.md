@@ -42,7 +42,20 @@ Override `COCCOC_EXECUTABLE_PATH` in `.env` when needed.
 
 ## Start The App
 
-Start the API, background worker, and dashboard as hidden processes:
+From File Explorer, double-click:
+
+```text
+Open Talent Radar.cmd
+```
+
+This starts the API and worker as hidden processes, then opens
+`http://localhost:8501` in Coc Coc `Default` for Vũ Văn Huy. VSCode's browser is
+not used.
+
+The launcher creates `data/coccoc_huy_user_data` as a Windows junction to the real
+Coc Coc User Data directory. It does not copy or create another browser user.
+
+The PowerShell equivalent is:
 
 ```powershell
 .\scripts\start_talent_radar.ps1
@@ -61,18 +74,18 @@ Runtime logs and PID files are stored under `data/runtime`.
 
 ## Connect Facebook
 
-1. Close all Coc Coc windows so Talent Radar can open the profile with its local
-   verification channel.
+1. For the first migration only, close Coc Coc and double-click
+   `Open Talent Radar.cmd`. Later sessions can keep this Coc Coc window open.
 2. Open Settings and select **Lien ket** for Facebook.
 3. Confirm that Settings shows `Vũ Văn Huy (Default)`.
-4. Sign in to Facebook and keep that Coc Coc window open.
-5. Return to Talent Radar and select **Xac nhan**.
-6. Talent Radar opens `/me` in a temporary tab and accepts the connection only when
+4. Sign in to Facebook in the new tab and keep Coc Coc open.
+5. Return to the Talent Radar tab and select **Xac nhan**.
+6. Talent Radar opens `/me` in a temporary background tab and accepts the connection only when
    Facebook does not redirect to login or checkpoint.
-7. After confirmation, close Coc Coc before starting a scheduled collection.
 
 The collector reuses Huy's existing profile. It does not read or export cookies,
-passwords, or saved credentials. Only one process can use the profile at a time.
+passwords, or saved credentials. The collector attaches to the same launcher-managed
+Coc Coc, so localhost can stay open during collection.
 
 ## Run At Windows Logon
 
