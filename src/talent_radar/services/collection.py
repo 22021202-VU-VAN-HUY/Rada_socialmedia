@@ -4,6 +4,7 @@ import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from uuid import uuid4
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -123,7 +124,7 @@ def enqueue_default_facebook_group_job(
     db: Session,
     user: User,
     *,
-    max_posts: int = 50,
+    max_posts: int = 200,
 ) -> CollectionJob:
     connection = db.scalar(
         select(PlatformConnection)
@@ -173,6 +174,9 @@ def enqueue_default_facebook_group_job(
                 max_posts=max_posts,
             ),
         )
+    elif schedule.max_posts != max_posts:
+        schedule.max_posts = max_posts
+        db.commit()
     return enqueue_job(db, user, schedule.id, trigger="manual")
 
 
@@ -240,7 +244,22 @@ def run_job(db: Session, settings: Settings, job: CollectionJob) -> None:
             raise CollectionServiceError(
                 f"Collector cho {connection.platform} chua duoc ho tro trong ban nay."
             )
-        payload = FacebookCollector(settings).collect(connection, source, schedule.max_posts)
+        if job.trigger == "manual":
+            local_now = datetime.now(ZoneInfo(settings.collection_timezone))
+            since = local_now.replace(
+                hour=0,
+                minute=0,
+                second=0,
+                microsecond=0,
+            ).astimezone(UTC)
+        else:
+            since = datetime.now(UTC) - timedelta(hours=source.lookback_hours)
+        payload = FacebookCollector(settings).collect(
+            connection,
+            source,
+            schedule.max_posts,
+            since=since,
+        )
         output_path = _write_export(settings.crawl_output_directory, payload, job.id)
         records = load_import_file(output_path)
         run_import_batch(
