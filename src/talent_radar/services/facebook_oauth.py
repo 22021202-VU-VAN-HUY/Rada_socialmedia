@@ -204,14 +204,19 @@ def _protect_token(token: str) -> str:
     try:
         import win32crypt
 
-        protected = win32crypt.CryptProtectData(
+        protected_result = win32crypt.CryptProtectData(
             token.encode("utf-8"),
             "Talent Radar Facebook token",
             None,
             None,
             None,
             0,
-        )[1]
+        )
+        protected = (
+            protected_result[1]
+            if isinstance(protected_result, tuple)
+            else protected_result
+        )
     except Exception as exc:
         raise FacebookOAuthError("Khong ma hoa duoc token Facebook tren Windows.") from exc
     return base64.b64encode(protected).decode("ascii")
