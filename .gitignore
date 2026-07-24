@@ -12,3 +12,5 @@ data/*.sqlite3
 data/imports/
 data/exports/
 data/reports/
+data/browser_profiles/
+data/runtime/
