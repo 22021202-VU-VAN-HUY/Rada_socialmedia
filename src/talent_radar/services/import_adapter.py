@@ -47,11 +47,13 @@ def _records_from_coccoc_export(data: dict) -> list[ImportRecord]:
                     content_text=post["content"],
                     external_id=post.get("external_id"),
                     permalink=post.get("url"),
+                    published_at=post.get("published_at"),
                     collected_at=collected_at,
                     author_id=post.get("author"),
                     raw_metadata={
                         "author_display_name": post.get("author"),
                         "group": post.get("group"),
+                        "published_label": post.get("published_label"),
                         "reaction_count": post.get("reaction_count", 0),
                         "reported_comment_count": post.get("reported_comment_count", 0),
                         "collected_comment_count": post.get("collected_comment_count", 0),
@@ -101,6 +103,15 @@ def run_import_batch(db: Session, payload: ImportBatchRequest) -> ImportBatchRes
             select(RawItem).where(RawItem.source_id == record.source_id, RawItem.content_hash == content_hash)
         )
         if duplicate is not None:
+            if record.published_at is not None and duplicate.published_at is None:
+                duplicate.published_at = record.published_at
+                normalized = db.scalar(
+                    select(NormalizedItem).where(
+                        NormalizedItem.raw_item_id == duplicate.id
+                    )
+                )
+                if normalized is not None:
+                    normalized.published_at = record.published_at
             skipped_duplicates += 1
             continue
 
