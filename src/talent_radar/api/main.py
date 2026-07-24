@@ -48,7 +48,10 @@ from talent_radar.services.browser_profiles import (
     connection_read,
     connection_for_platform,
     launch_login_browser,
-    verify_platform_login,
+)
+from talent_radar.services.connection_monitor import (
+    facebook_login_visible,
+    start_connection_monitor,
 )
 from talent_radar.services.collection import (
     CollectionServiceError,
@@ -199,11 +202,13 @@ def connect_platform(
     try:
         connection = connection_for_platform(db, settings, user, platform)
         connection = launch_login_browser(db, settings, connection)
+        if platform.casefold() == "facebook":
+            start_connection_monitor(connection.id)
         return ConnectionActionResult(
             connection=connection_read(connection),
             message=(
-                "Da mo dung profile Coc Coc Huy. Dang nhap Facebook va giu "
-                "cua so mo, sau do bam Xac nhan."
+                "Da mo tab Facebook trong Coc Coc Huy. Sau khi dang nhap, "
+                "Talent Radar se tu cap nhat trang thai ket noi."
             ),
         )
     except BrowserProfileError as exc:
@@ -218,9 +223,9 @@ def confirm_platform(
 ) -> ConnectionActionResult:
     try:
         connection = connection_for_platform(db, settings, user, platform)
-        verified = verify_platform_login(settings, connection)
     except BrowserProfileError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    verified = connection.platform == "facebook" and facebook_login_visible()
     if not verified:
         connection.status = "pending_login"
         connection.last_checked_at = datetime.now(UTC)
