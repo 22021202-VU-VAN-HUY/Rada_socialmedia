@@ -1,31 +1,29 @@
-# Talent Radar - Facebook collection plan
+# Talent Radar Collection Plan
 
-## Goal
+## Product Goal
 
-Collect posts, top-level comments, and replies that are visible in an authorized
-Coc Coc Facebook session. Store traceable JSON/CSV data with post and comment
-permalinks.
+Run a local, account-based collection app that can retain authenticated platform
+profiles and collect authorized Facebook posts, comments, and replies in the
+background.
 
-Only collection, storage, import, and review of source data are in scope.
+Only platform connection, collection, storage, import, scheduling, and review are in
+scope.
 
-## Supported inputs
+## Delivered
 
-- A public Facebook post URL.
-- A public Facebook group URL.
-- The example URLs in `textlinkmau.txt`.
-- An already signed-in Coc Coc window selected by its Windows handle.
+- Local accounts with scrypt password hashes and revocable opaque sessions.
+- Per-user Facebook, TikTok, and Threads connection records.
+- Existing Coc Coc profile selection, currently `Default` for Vũ Văn Huy.
+- Active Facebook login verification before a connection can become connected.
+- Playwright Facebook collection without SendKeys, clipboard access, or foreground
+  keyboard/mouse control.
+- Per-source schedules, Run now, job history, error state, and reauthentication state.
+- JSON export followed by import into raw and normalized records.
+- Authenticated Streamlit views for overview, posts, comments, runs, and settings.
+- Hidden local launcher plus an optional Windows logon task installer.
+- Manual foreground PowerShell crawler retained as fallback.
 
-## Collection flow
-
-1. Activate the selected Coc Coc window.
-2. Open the post or group URL in that existing session.
-3. Accumulate post permalinks while scrolling a group feed.
-4. Open each post and expand visible reply threads.
-5. Extract only the post dialog DOM.
-6. Save posts and comments to JSON and CSV in `data/exports`.
-7. Import the JSON into `RawItem` and `NormalizedItem` records when needed.
-
-## Data contract
+## Collection Contract
 
 ### Post
 
@@ -38,7 +36,7 @@ Only collection, storage, import, and review of source data are in scope.
 - `collected_comment_count`
 - `url`
 
-### Comment or reply
+### Comment Or Reply
 
 - `external_id`
 - `parent_external_id`
@@ -49,28 +47,30 @@ Only collection, storage, import, and review of source data are in scope.
 - `parent_author`
 - `permalink`
 
-## Guardrails
+## Operational Rules
 
-- Read only content visible in the selected Facebook session.
-- Do not inspect cookies, passwords, local storage, or browser profile files.
-- Do not like, share, post, message, hide, report, or delete anything.
-- Do not bypass login walls, CAPTCHA, group permissions, or Facebook limits.
-- Extract only the target post dialog; exclude Messenger, navigation, and feed
-  content outside the requested post.
+- A platform uses the configured existing Coc Coc profile.
+- All Coc Coc windows must be closed before Connect so Talent Radar can enable its
+  local verification channel.
+- The login window remains open while Confirm verifies Facebook `/me`.
+- Coc Coc must be closed before a worker launches the same profile for collection.
+- A disconnected connection disables its schedules but preserves the profile.
+- Deleting a schedule is a soft delete so collection history remains traceable.
+- TikTok and Threads cannot be scheduled until their collectors are implemented.
 
-## Near-term work
+## Next Collection Work
 
-1. Make Coc Coc window selection explicit when several windows are open.
-2. Add retries for slow post dialogs and temporarily unavailable replies.
-3. Add checkpoint files so a group crawl can resume after interruption.
-4. Add database import commands and duplicate reporting to the dashboard.
-5. Add fixture-based parser tests when Facebook changes its accessible labels.
+1. Add Facebook fixture captures and selector regression tests.
+2. Add resumable group checkpoints for long collection jobs.
+3. Add configurable comment/reply expansion limits.
+4. Add retry policy with bounded backoff for temporary navigation failures.
+5. Package the local launcher as a signed Windows tray application.
 
-## Completion criteria
+## Completion Criteria
 
-- A sample post reports the same comment count in Facebook and the export.
-- Replies preserve `parent_external_id`.
-- Every stored item has a source post URL or comment permalink.
-- Group collection retains links across Facebook's virtualized feed.
-- The dashboard displays only collected posts, comments, replies, and run
-  metadata.
+- Accounts cannot access another account's connections, schedules, or jobs.
+- Passwords and bearer tokens are never stored in plaintext.
+- Facebook login is verified and persists in the selected existing profile.
+- A due schedule produces one job, one export, and imported records.
+- Login expiry changes the connection to `reauth_required`.
+- The dashboard reports queued, running, completed, failed, and disconnected states.
