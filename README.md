@@ -11,8 +11,9 @@ Facebook content.
 ## Current Scope
 
 - Create a local Talent Radar account and sign in with email/password.
-- Connect Facebook, TikTok, or Threads through Coc Coc profile `Default` belonging
-  to Vũ Văn Huy.
+- Connect Facebook with Meta OAuth in Coc Coc profile `Default` belonging to
+  Vũ Văn Huy.
+- Open TikTok or Threads login pages in the configured Coc Coc profile.
 - Collect public Facebook posts, comments, and replies visible to the connected
   account.
 - Run a Facebook source immediately or on a repeating schedule.
@@ -39,6 +40,19 @@ C:\Program Files\CocCoc\Browser\Application\browser.exe
 ```
 
 Override `COCCOC_EXECUTABLE_PATH` in `.env` when needed.
+
+Facebook OAuth also requires a Meta app:
+
+```dotenv
+FACEBOOK_APP_ID=...
+FACEBOOK_APP_SECRET=...
+FACEBOOK_REDIRECT_URI=http://localhost:8000/connections/facebook/callback
+FACEBOOK_GRAPH_API_VERSION=v20.0
+FACEBOOK_SCOPES=public_profile
+```
+
+Add the exact redirect URI to **Facebook Login > Settings > Valid OAuth Redirect
+URIs** in Meta for Developers. Keep `.env` local; never commit the app secret.
 
 ## Start The App
 
@@ -72,13 +86,16 @@ Runtime logs and PID files are stored under `data/runtime`.
 ## Connect Facebook
 
 1. Open Settings and select **Lien ket** for Facebook.
-2. Coc Coc opens `facebook.com/me` in a new tab under `Vũ Văn Huy (Default)`.
-3. Sign in when Facebook requests it.
-4. Return to Talent Radar. Connection status updates automatically after Facebook
-   redirects the tab to the signed-in profile.
+2. Coc Coc opens Facebook's official OAuth permission screen under
+   `Vũ Văn Huy (Default)`.
+3. Review the requested permission and continue.
+4. Facebook redirects to the local API callback. Talent Radar exchanges the code
+   server-side, verifies `/me`, and only then marks the connection as connected.
 
-The collector reuses Huy's existing profile. It does not read or export cookies,
-passwords, or saved credentials.
+The OAuth access token is protected with Windows DPAPI before it is stored locally.
+The collector still reuses Huy's existing profile and does not export cookies,
+passwords, or saved credentials. OAuth proves account authorization; it does not
+automatically grant access to arbitrary Facebook group posts or comments.
 
 ## Run At Windows Logon
 
@@ -108,7 +125,7 @@ Core endpoints:
 - `POST /auth/register`, `POST /auth/login`, `GET /auth/me`, `POST /auth/logout`
 - `GET /connections`
 - `POST /connections/{platform}/connect`
-- `POST /connections/{platform}/confirm`
+- `GET /connections/facebook/callback`
 - `POST /connections/{platform}/disconnect`
 - `GET|POST /schedules`
 - `PATCH|DELETE /schedules/{id}`
