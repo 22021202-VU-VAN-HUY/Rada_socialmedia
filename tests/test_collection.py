@@ -105,7 +105,7 @@ def test_default_facebook_group_action_creates_one_manual_background_job(
     assert schedule is not None
     assert schedule.enabled is False
     assert schedule.interval_minutes == 1440
-    assert schedule.max_posts == 50
+    assert schedule.max_posts == 200
 
 
 def test_delete_schedule_preserves_job_history(db: Session) -> None:
