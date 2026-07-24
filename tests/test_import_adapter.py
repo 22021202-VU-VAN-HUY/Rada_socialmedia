@@ -1,4 +1,5 @@
 import json
+from datetime import datetime
 from pathlib import Path
 
 from sqlalchemy import create_engine, select
@@ -42,6 +43,8 @@ def test_load_import_file_accepts_coccoc_export(tmp_path: Path) -> None:
                             "author": "Anonymous",
                             "content": "Sample post",
                             "url": "https://www.facebook.com/groups/example/posts/post_1/",
+                            "published_at": "2026-07-23T09:30:00+07:00",
+                            "published_label": "30 phút",
                         },
                         "comments": [
                             {
@@ -69,6 +72,8 @@ def test_load_import_file_accepts_coccoc_export(tmp_path: Path) -> None:
     records = load_import_file(path)
 
     assert [record.item_type for record in records] == ["post", "comment", "comment"]
+    assert records[0].published_at.isoformat() == "2026-07-23T09:30:00+07:00"
+    assert records[0].raw_metadata["published_label"] == "30 phút"
     assert records[1].parent_external_id == "post_1"
     assert records[1].raw_metadata["author_display_name"] == "Member"
     assert records[2].content_text == "[non-text comment]"
@@ -147,6 +152,52 @@ def test_run_import_batch_skips_duplicate_content() -> None:
     assert second.inserted == 0
     assert second.skipped_duplicates == 1
     assert len(db.scalars(select(RawItem)).all()) == 1
+
+
+def test_duplicate_import_backfills_missing_published_at() -> None:
+    db = _session()
+    db.add(
+        Source(
+            id="fb_group_laptrinhvienit",
+            platform="facebook",
+            source_name="Facebook group",
+            authorization_status="approved",
+            collection_method="import",
+        )
+    )
+    db.commit()
+    first = ImportRecord(
+        source_id="fb_group_laptrinhvienit",
+        platform="facebook",
+        item_type="post",
+        content_text="Bai viet tu group Facebook",
+        external_id="post_1",
+    )
+    dated = ImportRecord(
+        source_id="fb_group_laptrinhvienit",
+        platform="facebook",
+        item_type="post",
+        content_text="Bai viet tu group Facebook",
+        external_id="post_1",
+        published_at="2026-07-24T08:30:00+07:00",
+    )
+
+    run_import_batch(
+        db,
+        ImportBatchRequest(import_batch_id="batch_first", records=[first]),
+    )
+    result = run_import_batch(
+        db,
+        ImportBatchRequest(import_batch_id="batch_second", records=[dated]),
+    )
+
+    raw_item = db.scalar(select(RawItem))
+    normalized_item = db.scalar(select(NormalizedItem))
+    assert result.skipped_duplicates == 1
+    assert raw_item is not None
+    assert normalized_item is not None
+    assert raw_item.published_at == datetime(2026, 7, 24, 8, 30)
+    assert normalized_item.published_at == datetime(2026, 7, 24, 8, 30)
 
 
 def _session():
