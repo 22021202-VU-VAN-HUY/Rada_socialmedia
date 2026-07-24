@@ -233,16 +233,12 @@ git diff --check
 
 ### CONNECTION FLOW CORRECTION
 
-The initial implementation required all Coc Coc windows to close before Connect.
-That conflicted with using Coc Coc itself to view the local dashboard. The corrected
-flow uses fixed local CDP port `9223`:
+User feedback showed that exposing a launcher-managed browser mode was still too
+technical. Facebook connection now follows a one-click browser flow:
 
-- `Open Talent Radar.cmd` starts hidden services and opens localhost in Coc Coc
-  `Default` for Vũ Văn Huy, outside VSCode.
-- The launcher uses a local directory junction to the existing Coc Coc User Data so
-  it can request the local debugging channel without creating a second profile.
-- Connect reuses that controlled browser and opens a platform tab.
-- Confirm verifies Facebook `/me` through the same browser.
-- The Facebook collector creates and closes only its own background tab.
-- A one-time Coc Coc restart is required only when migrating an already-running,
-  uncontrolled Coc Coc process to launcher-managed mode.
+- Connect opens `facebook.com/me` in a normal tab of Coc Coc `Default`.
+- Coc Coc may already be open and displaying localhost.
+- A Windows UI Automation monitor reads only the address bar value.
+- Facebook login and checkpoint URLs remain pending or require reauthentication.
+- A redirect to the signed-in profile marks the connection connected.
+- Settings refreshes every three seconds and no longer asks for manual confirmation.
