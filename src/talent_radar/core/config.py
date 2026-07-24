@@ -21,8 +21,10 @@ class Settings(BaseSettings):
     coccoc_user_data_directory: Path = (
         Path.home() / "AppData/Local/CocCoc/Browser/User Data"
     )
+    coccoc_control_user_data_directory: Path = Path("data/coccoc_huy_user_data")
     coccoc_profile_directory: str = "Default"
     coccoc_profile_account_name: str = "Vũ Văn Huy"
+    coccoc_remote_debugging_port: int = 9223
     browser_headless: bool = False
 
     auth_session_hours: int = 168
