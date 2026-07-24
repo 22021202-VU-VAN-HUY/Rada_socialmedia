@@ -110,6 +110,8 @@ class PlatformConnectionRead(BaseModel):
     profile_directory: str | None = None
     profile_name: str | None = None
     profile_account_name: str | None = None
+    connected_account_id: str | None = None
+    connected_account_name: str | None = None
 
     model_config = {"from_attributes": True}
 
