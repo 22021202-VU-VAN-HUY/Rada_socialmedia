@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     crawl_lookback_hours: int = 24
     crawl_max_posts_per_source: int = 200
     crawl_max_comments_per_post: int = 100
+    collection_timezone: str = "Asia/Ho_Chi_Minh"
     crawl_output_directory: Path = Path("data/exports")
     coccoc_window_handle: int | None = None
     coccoc_executable_path: Path = Path(
