@@ -230,3 +230,19 @@ git diff --check
   executables may have compatibility differences from bundled Chromium.
 - Visual desktop/mobile screenshot review remains outstanding due to unavailable
   browser-control context. Streamlit component-level rendering passed.
+
+### CONNECTION FLOW CORRECTION
+
+The initial implementation required all Coc Coc windows to close before Connect.
+That conflicted with using Coc Coc itself to view the local dashboard. The corrected
+flow uses fixed local CDP port `9223`:
+
+- `Open Talent Radar.cmd` starts hidden services and opens localhost in Coc Coc
+  `Default` for Vũ Văn Huy, outside VSCode.
+- The launcher uses a local directory junction to the existing Coc Coc User Data so
+  it can request the local debugging channel without creating a second profile.
+- Connect reuses that controlled browser and opens a platform tab.
+- Confirm verifies Facebook `/me` through the same browser.
+- The Facebook collector creates and closes only its own background tab.
+- A one-time Coc Coc restart is required only when migrating an already-running,
+  uncontrolled Coc Coc process to launcher-managed mode.
