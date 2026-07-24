@@ -20,7 +20,7 @@ def load_import_file(path: Path) -> list[ImportRecord]:
     if suffix == ".json":
         with path.open("r", encoding="utf-8-sig") as handle:
             data = json.load(handle)
-        if isinstance(data, dict) and data.get("crawler") == "coccoc-ui":
+        if isinstance(data, dict) and data.get("crawler") in {"coccoc-ui", "coccoc-playwright"}:
             return _records_from_coccoc_export(data)
         rows = data.get("records", data) if isinstance(data, dict) else data
         if not isinstance(rows, list):
