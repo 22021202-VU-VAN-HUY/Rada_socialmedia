@@ -62,7 +62,11 @@ def connection_for_platform(
             user_id=user.id,
             platform=platform,
             status="disconnected",
-            auth_method="existing_browser_profile",
+            auth_method=(
+                "facebook_oauth"
+                if platform == "facebook"
+                else "existing_browser_profile"
+            ),
             profile_dir=str(profile.user_data_dir),
             login_url=login_url,
             connection_metadata=_profile_metadata(profile),
@@ -73,16 +77,16 @@ def connection_for_platform(
         profile_changed = (
             Path(connection.profile_dir).resolve() != profile.user_data_dir
             or metadata.get("profile_directory") != profile.directory
-            or connection.auth_method != "existing_browser_profile"
         )
         connection.profile_dir = str(profile.user_data_dir)
-        connection.auth_method = "existing_browser_profile"
+        if platform != "facebook":
+            connection.auth_method = "existing_browser_profile"
         connection.login_url = login_url
         connection.connection_metadata = {
             **metadata,
             **_profile_metadata(profile),
         }
-        if profile_changed:
+        if profile_changed and connection.auth_method != "facebook_oauth":
             connection.status = "disconnected"
             connection.last_connected_at = None
             connection.last_checked_at = None
@@ -91,6 +95,22 @@ def connection_for_platform(
     db.commit()
     db.refresh(connection)
     return connection
+
+
+def launch_coccoc_url(settings: Settings, url: str) -> int:
+    executable = settings.coccoc_executable_path.resolve()
+    if not executable.is_file():
+        raise BrowserProfileError(f"Khong tim thay Coc Coc tai {executable}")
+    profile = selected_coccoc_profile(settings)
+    process = subprocess.Popen(
+        [
+            str(executable),
+            f"--profile-directory={profile.directory}",
+            url,
+        ],
+        start_new_session=True,
+    )
+    return process.pid
 
 
 def launch_login_browser(
@@ -244,6 +264,8 @@ def connection_read(connection: PlatformConnection) -> PlatformConnectionRead:
         profile_directory=metadata.get("profile_directory"),
         profile_name=metadata.get("profile_name"),
         profile_account_name=metadata.get("profile_account_name"),
+        connected_account_id=metadata.get("facebook_user_id"),
+        connected_account_name=metadata.get("facebook_user_name"),
     )
 
 
