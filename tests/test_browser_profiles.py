@@ -3,13 +3,11 @@ from contextlib import nullcontext
 from pathlib import Path
 from unittest.mock import Mock
 
-import pytest
 from sqlalchemy.orm import Session
 
 from talent_radar.core.config import Settings
 from talent_radar.models import PlatformConnection
 from talent_radar.services.browser_profiles import (
-    BrowserProfileError,
     launch_login_browser,
     selected_coccoc_profile,
     verify_platform_login,
@@ -69,30 +67,17 @@ def test_login_browser_uses_existing_huy_profile(
     process = Mock(pid=4321)
     popen = Mock(return_value=process)
     monkeypatch.setattr("talent_radar.services.browser_profiles.subprocess.Popen", popen)
-    monkeypatch.setattr(
-        "talent_radar.services.browser_profiles.coccoc_is_running",
-        lambda: False,
-    )
-    monkeypatch.setattr(
-        "talent_radar.services.browser_profiles._debug_port_available",
-        lambda _port: False,
-    )
-    monkeypatch.setattr(
-        "talent_radar.services.browser_profiles._wait_for_debug_port",
-        lambda _port: True,
-    )
 
     updated = launch_login_browser(db, settings, connection)
 
     arguments = popen.call_args.args[0]
-    assert f"--user-data-dir={settings.coccoc_user_data_directory.resolve()}" in arguments
     assert "--profile-directory=Default" in arguments
-    assert "https://www.facebook.com/" in arguments
+    assert "https://www.facebook.com/me" in arguments
     assert updated.status == "pending_login"
-    assert updated.connection_metadata["debug_port"] == 9223
+    assert updated.connection_metadata["login_check"] == "coccoc_address_bar"
 
 
-def test_login_browser_reuses_controlled_coccoc(
+def test_login_browser_does_not_require_managed_coccoc(
     db: Session,
     tmp_path: Path,
     monkeypatch,
@@ -109,54 +94,13 @@ def test_login_browser_reuses_controlled_coccoc(
     )
     db.add(connection)
     db.commit()
-    open_url = Mock()
-    popen = Mock()
-    monkeypatch.setattr(
-        "talent_radar.services.browser_profiles._debug_port_available",
-        lambda port: port == 9223,
-    )
-    monkeypatch.setattr(
-        "talent_radar.services.browser_profiles._open_url_in_controlled_browser",
-        open_url,
-    )
+    popen = Mock(return_value=Mock(pid=1234))
     monkeypatch.setattr("talent_radar.services.browser_profiles.subprocess.Popen", popen)
 
     updated = launch_login_browser(db, settings, connection)
 
-    open_url.assert_called_once_with(9223, "https://www.facebook.com/")
-    popen.assert_not_called()
+    popen.assert_called_once()
     assert updated.status == "pending_login"
-    assert updated.connection_metadata["debug_port"] == 9223
-
-
-def test_login_browser_rejects_uncontrolled_coccoc(
-    db: Session,
-    tmp_path: Path,
-    monkeypatch,
-) -> None:
-    settings = fake_coccoc_settings(tmp_path)
-    connection = PlatformConnection(
-        id="connection_uncontrolled",
-        user_id="user_123",
-        platform="facebook",
-        status="disconnected",
-        profile_dir=str(settings.coccoc_user_data_directory),
-        login_url="https://www.facebook.com/",
-        connection_metadata={"profile_directory": "Default"},
-    )
-    db.add(connection)
-    db.commit()
-    monkeypatch.setattr(
-        "talent_radar.services.browser_profiles._debug_port_available",
-        lambda _port: False,
-    )
-    monkeypatch.setattr(
-        "talent_radar.services.browser_profiles.coccoc_is_running",
-        lambda: True,
-    )
-
-    with pytest.raises(BrowserProfileError, match="ngoai che do Talent Radar"):
-        launch_login_browser(db, settings, connection)
 
 
 class FakeLocator:
