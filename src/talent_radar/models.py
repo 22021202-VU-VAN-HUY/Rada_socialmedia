@@ -50,6 +50,20 @@ class PlatformConnection(TimestampMixin, Base):
     connection_metadata: Mapped[dict] = mapped_column(JSON, default=dict)
 
 
+class OAuthState(TimestampMixin, Base):
+    __tablename__ = "oauth_states"
+
+    id: Mapped[str] = mapped_column(String(120), primary_key=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+    connection_id: Mapped[str] = mapped_column(
+        ForeignKey("platform_connections.id"), index=True
+    )
+    provider: Mapped[str] = mapped_column(String(40), index=True)
+    state_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
 class CollectionSchedule(TimestampMixin, Base):
     __tablename__ = "collection_schedules"
 
