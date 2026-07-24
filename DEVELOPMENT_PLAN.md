@@ -50,10 +50,14 @@ scope.
 ## Operational Rules
 
 - A platform uses the configured existing Coc Coc profile.
-- All Coc Coc windows must be closed before Connect so Talent Radar can enable its
-  local verification channel.
+- Coc Coc needs one restart through `Open Talent Radar.cmd` when migrating from a
+  normally opened browser to launcher-managed mode.
+- After migration, localhost, platform login, verification, and collection share
+  the same Coc Coc process through local port `9223`.
+- `data/coccoc_huy_user_data` is a junction to the real User Data directory, not a
+  copied browser profile.
 - The login window remains open while Confirm verifies Facebook `/me`.
-- Coc Coc must be closed before a worker launches the same profile for collection.
+- The worker attaches a background tab without closing the localhost tab.
 - A disconnected connection disables its schedules but preserves the profile.
 - Deleting a schedule is a soft delete so collection history remains traceable.
 - TikTok and Threads cannot be scheduled until their collectors are implemented.
