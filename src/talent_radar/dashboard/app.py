@@ -452,8 +452,8 @@ def render_settings() -> None:
         return
     st.subheader("Nen tang")
     st.caption(
-        "Facebook dung profile Coc Coc Huy (Default). Dong tat ca Coc Coc truoc khi "
-        "Lien ket; sau khi dang nhap, giu cua so mo va bam Xac nhan."
+        "Mo app bang Open Talent Radar.cmd de localhost va Facebook dung chung Coc Coc "
+        "Huy (Default). Co the giu trinh duyet mo khi Lien ket va chay collector."
     )
     for connection in connections:
         platform_actions(connection)
