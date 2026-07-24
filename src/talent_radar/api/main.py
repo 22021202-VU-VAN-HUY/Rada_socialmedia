@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
-from datetime import UTC, datetime
 
 from fastapi import Depends, FastAPI, HTTPException, Response
+from fastapi.responses import HTMLResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -47,11 +47,8 @@ from talent_radar.services.browser_profiles import (
     PLATFORM_LOGIN_URLS,
     connection_read,
     connection_for_platform,
+    launch_coccoc_url,
     launch_login_browser,
-)
-from talent_radar.services.connection_monitor import (
-    facebook_login_visible,
-    start_connection_monitor,
 )
 from talent_radar.services.collection import (
     CollectionServiceError,
@@ -59,6 +56,12 @@ from talent_radar.services.collection import (
     delete_schedule as delete_collection_schedule,
     enqueue_job,
     update_schedule as update_collection_schedule,
+)
+from talent_radar.services.facebook_oauth import (
+    FacebookOAuthError,
+    begin_facebook_oauth,
+    complete_facebook_oauth,
+    mark_facebook_oauth_error,
 )
 from talent_radar.services.import_adapter import run_import_batch
 from talent_radar.services.source_registry import load_source_registry, upsert_sources
@@ -201,54 +204,80 @@ def connect_platform(
 ) -> ConnectionActionResult:
     try:
         connection = connection_for_platform(db, settings, user, platform)
-        connection = launch_login_browser(db, settings, connection)
         if platform.casefold() == "facebook":
-            start_connection_monitor(connection.id)
+            oauth_url = begin_facebook_oauth(db, settings, connection)
+            connection.browser_process_id = launch_coccoc_url(settings, oauth_url)
+            db.commit()
+            db.refresh(connection)
+            message = (
+                "Da mo cua so cap quyen Facebook trong Coc Coc Huy. "
+                "Ket noi chi hoan tat sau khi Facebook chuyen ve Talent Radar."
+            )
+        else:
+            connection = launch_login_browser(db, settings, connection)
+            message = "Da mo trang dang nhap trong Coc Coc Huy."
         return ConnectionActionResult(
             connection=connection_read(connection),
-            message=(
-                "Da mo tab Facebook trong Coc Coc Huy. Sau khi dang nhap, "
-                "Talent Radar se tu cap nhat trang thai ket noi."
-            ),
+            message=message,
         )
-    except BrowserProfileError as exc:
+    except (BrowserProfileError, FacebookOAuthError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-@app.post("/connections/{platform}/confirm", response_model=ConnectionActionResult)
-def confirm_platform(
-    platform: str,
-    user: User = Depends(current_user),
+@app.get("/connections/facebook/callback")
+def facebook_callback(
+    state: str = "",
+    code: str = "",
+    error: str = "",
+    error_description: str = "",
     db: Session = Depends(get_db),
-) -> ConnectionActionResult:
+) -> HTMLResponse:
+    if error or not code or not state:
+        message = error_description or error or "Facebook khong cap quyen."
+        if state:
+            mark_facebook_oauth_error(db, state=state, message=message)
+        return _oauth_completion_page(success=False)
     try:
-        connection = connection_for_platform(db, settings, user, platform)
-    except BrowserProfileError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    verified = connection.platform == "facebook" and facebook_login_visible()
-    if not verified:
-        connection.status = "pending_login"
-        connection.last_checked_at = datetime.now(UTC)
-        connection.last_error = (
-            "Chua phat hien phien Facebook da dang nhap tren profile Huy."
+        complete_facebook_oauth(
+            db,
+            settings,
+            state=state,
+            code=code,
         )
-        db.commit()
-        raise HTTPException(status_code=400, detail=connection.last_error)
-    connection.status = "connected"
-    connection.last_connected_at = datetime.now(UTC)
-    connection.last_checked_at = datetime.now(UTC)
-    connection.last_error = None
-    connection.browser_process_id = None
-    connection.connection_metadata = {
-        **(connection.connection_metadata or {}),
-        "login_verified": True,
-        "login_verified_at": datetime.now(UTC).isoformat(),
-    }
-    db.commit()
-    db.refresh(connection)
-    return ConnectionActionResult(
-        connection=connection_read(connection),
-        message="Da kiem tra Facebook dang nhap tren dung profile Coc Coc Huy.",
+    except FacebookOAuthError as exc:
+        mark_facebook_oauth_error(db, state=state, message=str(exc))
+        return _oauth_completion_page(success=False)
+    return _oauth_completion_page(success=True)
+
+
+def _oauth_completion_page(*, success: bool) -> HTMLResponse:
+    title = "Da lien ket Facebook" if success else "Chua lien ket duoc Facebook"
+    detail = (
+        "Talent Radar da xac minh tai khoan. Tab nay se tu dong dong."
+        if success
+        else "Quay lai Talent Radar de xem chi tiet va thu lai."
+    )
+    close_script = (
+        "<script>setTimeout(() => window.close(), 1200);</script>"
+        if success
+        else ""
+    )
+    return HTMLResponse(
+        f"""<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{title}</title>
+  <style>
+    body {{ font-family: Arial, sans-serif; margin: 0; background: #f7f8fa; color: #1c2530; }}
+    main {{ max-width: 560px; margin: 16vh auto; padding: 32px; }}
+    h1 {{ font-size: 28px; letter-spacing: 0; }}
+    p {{ line-height: 1.5; color: #53606d; }}
+  </style>
+</head>
+<body><main><h1>{title}</h1><p>{detail}</p></main>{close_script}</body>
+</html>"""
     )
 
 
@@ -264,6 +293,13 @@ def disconnect_platform(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     connection.status = "disconnected"
     connection.browser_process_id = None
+    if connection.platform == "facebook":
+        metadata = connection.connection_metadata or {}
+        connection.connection_metadata = {
+            key: value
+            for key, value in metadata.items()
+            if not key.startswith("facebook_") and not key.startswith("oauth_")
+        }
     schedules = db.scalars(
         select(CollectionSchedule).where(
             CollectionSchedule.user_id == user.id,
