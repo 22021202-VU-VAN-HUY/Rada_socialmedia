@@ -2,13 +2,16 @@ from __future__ import annotations
 
 import re
 from datetime import UTC, datetime
-from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
 
 from playwright.sync_api import Error as PlaywrightError, Page, sync_playwright
 
 from talent_radar.core.config import Settings
 from talent_radar.models import PlatformConnection, Source
+from talent_radar.services.browser_profiles import (
+    BrowserProfileError,
+    ensure_controlled_coccoc,
+)
 
 
 class CollectionError(RuntimeError):
@@ -29,43 +32,33 @@ class FacebookCollector:
         source: Source,
         max_posts: int,
     ) -> dict:
-        executable = self.settings.coccoc_executable_path.resolve()
-        user_data_dir = Path(connection.profile_dir).resolve()
-        profile_directory = (connection.connection_metadata or {}).get(
-            "profile_directory",
-            self.settings.coccoc_profile_directory,
-        )
-        if not executable.is_file():
-            raise CollectionError(f"Khong tim thay Coc Coc tai {executable}")
         if not source.source_url:
             raise CollectionError("Nguon chua co URL.")
 
-        if not (user_data_dir / profile_directory).is_dir():
-            raise CollectionError(
-                f"Khong tim thay profile Coc Coc {profile_directory}."
+        try:
+            debug_port, _ = ensure_controlled_coccoc(
+                self.settings,
+                source.source_url,
+                minimized=True,
             )
-        browser_args = ["--no-first-run", "--no-default-browser-check"]
-        browser_args.append(f"--profile-directory={profile_directory}")
-        if not self.settings.browser_headless:
-            browser_args.append("--start-minimized")
+        except BrowserProfileError as exc:
+            raise CollectionError(str(exc)) from exc
 
         with sync_playwright() as playwright:
             try:
-                context = playwright.chromium.launch_persistent_context(
-                    str(user_data_dir),
-                    executable_path=str(executable),
-                    headless=self.settings.browser_headless,
-                    args=browser_args,
-                    viewport={"width": 1440, "height": 1000},
-                    locale="vi-VN",
+                browser = playwright.chromium.connect_over_cdp(
+                    f"http://127.0.0.1:{debug_port}"
                 )
+                if not browser.contexts:
+                    raise CollectionError("Coc Coc khong co browser context.")
+                context = browser.contexts[0]
             except PlaywrightError as exc:
                 raise CollectionError(
-                    "Khong mo duoc profile Huy. Hay dong tat ca cua so Coc Coc roi thu lai."
+                    "Khong gan duoc collector vao Coc Coc cua Talent Radar."
                 ) from exc
 
+            page = context.new_page()
             try:
-                page = context.pages[0] if context.pages else context.new_page()
                 page.set_default_timeout(15_000)
                 page.set_default_navigation_timeout(60_000)
                 urls = self._post_urls(page, source.source_url, max_posts)
@@ -92,7 +85,7 @@ class FacebookCollector:
                     "failures": failures,
                 }
             finally:
-                context.close()
+                page.close()
 
     def _post_urls(self, page: Page, source_url: str, max_posts: int) -> list[str]:
         canonical = _canonical_url(source_url)
