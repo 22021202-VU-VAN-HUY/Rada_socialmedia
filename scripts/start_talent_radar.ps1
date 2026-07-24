@@ -1,8 +1,7 @@
 [CmdletBinding()]
 param(
     [int]$ApiPort = 8000,
-    [int]$DashboardPort = 8501,
-    [int]$CocCocDebugPort = 9223
+    [int]$DashboardPort = 8501
 )
 
 $ErrorActionPreference = "Stop"
@@ -55,48 +54,11 @@ Start-TalentRadarProcess -Name "dashboard" -Arguments @(
 
 $dashboardUrl = "http://localhost:$DashboardPort"
 $coccocExecutable = "C:\Program Files\CocCoc\Browser\Application\browser.exe"
-$coccocUserData = Join-Path $env:LOCALAPPDATA "CocCoc\Browser\User Data"
-$coccocControlUserData = Join-Path $projectRoot "data\coccoc_huy_user_data"
-$debugEndpoint = "http://127.0.0.1:$CocCocDebugPort/json/version"
-
-if (-not (Test-Path -LiteralPath $coccocControlUserData)) {
-    New-Item `
-        -ItemType Junction `
-        -Path $coccocControlUserData `
-        -Target $coccocUserData | Out-Null
-}
 
 Start-Sleep -Seconds 2
 
-$controlledCocCoc = $false
-try {
-    $response = Invoke-WebRequest -Uri $debugEndpoint -UseBasicParsing -TimeoutSec 1
-    $controlledCocCoc = $response.StatusCode -eq 200
-} catch {
-    $controlledCocCoc = $false
-}
-
-if ($controlledCocCoc) {
-    Start-Process `
-        -FilePath $coccocExecutable `
-        -ArgumentList @("--profile-directory=Default", $dashboardUrl)
-} elseif (Get-Process browser -ErrorAction SilentlyContinue) {
-    Write-Warning (
-        "Coc Coc is already running without Talent Radar control. Close Coc Coc once " +
-        "and run this launcher again."
-    )
-} else {
-    Start-Process `
-        -FilePath $coccocExecutable `
-        -ArgumentList @(
-            "`"--user-data-dir=$coccocControlUserData`"",
-            "--profile-directory=Default",
-            "--remote-debugging-port=$CocCocDebugPort",
-            "--remote-debugging-address=127.0.0.1",
-            "--no-first-run",
-            "--no-default-browser-check",
-            $dashboardUrl
-        )
-}
+Start-Process `
+    -FilePath $coccocExecutable `
+    -ArgumentList @("--profile-directory=Default", $dashboardUrl)
 
 Write-Output "Talent Radar: $dashboardUrl"
