@@ -27,7 +27,9 @@ const platformLabels: Record<string, string> = {
 
 export function SettingsPage() {
   const queryClient = useQueryClient();
-  const [tab, setTab] = useState<"platforms" | "schedules">("platforms");
+  const [tab, setTab] = useState<"platforms" | "configurations">(
+    "platforms",
+  );
   const [notice, setNotice] = useState("");
   const connections = useQuery({
     queryKey: ["connections"],
@@ -39,9 +41,9 @@ export function SettingsPage() {
         ? 2_000
         : false,
   });
-  const schedules = useQuery({
-    queryKey: ["schedules"],
-    queryFn: api.schedules,
+  const configurations = useQuery({
+    queryKey: ["run-configurations"],
+    queryFn: api.runConfigurations,
   });
   const sources = useQuery({ queryKey: ["sources"], queryFn: api.sources });
   const connectionAction = useMutation({
@@ -59,7 +61,7 @@ export function SettingsPage() {
       setNotice(result.message);
       void queryClient.invalidateQueries({ queryKey: ["connections"] });
       void queryClient.invalidateQueries({ queryKey: ["overview"] });
-      void queryClient.invalidateQueries({ queryKey: ["schedules"] });
+      void queryClient.invalidateQueries({ queryKey: ["run-configurations"] });
     },
   });
   const syncSources = useMutation({
@@ -74,7 +76,7 @@ export function SettingsPage() {
     <>
       <PageHeader
         title="Cài đặt"
-        description="Quản lý nền tảng, nguồn và lịch thu thập."
+        description="Quản lý nền tảng, nguồn và cấu hình chạy thủ công."
       />
       <div className="settings-tabs" role="tablist">
         <button
@@ -86,8 +88,8 @@ export function SettingsPage() {
         </button>
         <button
           type="button"
-          className={tab === "schedules" ? "active" : ""}
-          onClick={() => setTab("schedules")}
+          className={tab === "configurations" ? "active" : ""}
+          onClick={() => setTab("configurations")}
         >
           Cấu hình lượt chạy
         </button>
@@ -204,12 +206,12 @@ export function SettingsPage() {
           </div>
         </section>
       ) : (
-        <SchedulesPanel
+        <RunConfigurationsPanel
           connections={connections.data || []}
           sources={sources.data || []}
-          schedules={schedules.data || []}
-          loading={schedules.isLoading}
-          error={schedules.error}
+          configurations={configurations.data || []}
+          loading={configurations.isLoading}
+          error={configurations.error}
           onNotice={setNotice}
         />
       )}
@@ -217,17 +219,17 @@ export function SettingsPage() {
   );
 }
 
-function SchedulesPanel({
+function RunConfigurationsPanel({
   connections,
   sources,
-  schedules,
+  configurations,
   loading,
   error,
   onNotice,
 }: {
   connections: Awaited<ReturnType<typeof api.connections>>;
   sources: Awaited<ReturnType<typeof api.sources>>;
-  schedules: Awaited<ReturnType<typeof api.schedules>>;
+  configurations: Awaited<ReturnType<typeof api.runConfigurations>>;
   loading: boolean;
   error: unknown;
   onNotice: (message: string) => void;
@@ -242,51 +244,49 @@ function SchedulesPanel({
   const [sourceId, setSourceId] = useState("");
   const [maxPosts, setMaxPosts] = useState(20);
   const refresh = () => {
-    void queryClient.invalidateQueries({ queryKey: ["schedules"] });
+    void queryClient.invalidateQueries({ queryKey: ["run-configurations"] });
     void queryClient.invalidateQueries({ queryKey: ["jobs"] });
     void queryClient.invalidateQueries({ queryKey: ["overview"] });
   };
-  const createSchedule = useMutation({
-    mutationFn: api.createSchedule,
+  const createConfiguration = useMutation({
+    mutationFn: api.createRunConfiguration,
     onSuccess: () => {
-      onNotice("Đã tạo lịch thu thập.");
+      onNotice("Đã lưu cấu hình lượt chạy.");
       refresh();
     },
   });
-  const runSchedule = useMutation({
-    mutationFn: api.runSchedule,
+  const runConfiguration = useMutation({
+    mutationFn: api.runConfiguration,
     onSuccess: () => {
       onNotice("Đã đưa lượt thu thập vào hàng đợi.");
       refresh();
     },
   });
-  const deleteSchedule = useMutation({
-    mutationFn: api.deleteSchedule,
+  const deleteConfiguration = useMutation({
+    mutationFn: api.deleteRunConfiguration,
     onSuccess: refresh,
   });
 
   function submit(event: FormEvent) {
     event.preventDefault();
     if (!facebookConnection || !sourceId) return;
-    createSchedule.mutate({
+    createConfiguration.mutate({
       connection_id: facebookConnection.id,
       source_id: sourceId,
-      interval_minutes: 1440,
       max_posts: maxPosts,
-      enabled: false,
     });
   }
 
   const mutationError =
-    createSchedule.error ||
-    runSchedule.error ||
-    deleteSchedule.error;
+    createConfiguration.error ||
+    runConfiguration.error ||
+    deleteConfiguration.error;
 
   return (
     <section className="settings-section">
       {mutationError && <ErrorState error={mutationError} />}
-      <div className="schedule-layout">
-        <form className="schedule-form" onSubmit={submit}>
+      <div className="configuration-layout">
+        <form className="configuration-form" onSubmit={submit}>
           <div className="section-heading">
             <div>
               <h2>Tạo cấu hình</h2>
@@ -324,9 +324,9 @@ function SchedulesPanel({
               </label>
               <button
                 className="primary-button"
-                disabled={createSchedule.isPending}
+                disabled={createConfiguration.isPending}
               >
-                {createSchedule.isPending && (
+                {createConfiguration.isPending && (
                   <LoaderCircle className="spin" size={17} />
                 )}
                 Tạo cấu hình
@@ -335,7 +335,7 @@ function SchedulesPanel({
           )}
         </form>
 
-        <div className="schedule-list">
+        <div className="configuration-list">
           <div className="section-heading">
             <div>
               <h2>Cấu hình đã lưu</h2>
@@ -346,30 +346,36 @@ function SchedulesPanel({
             <LoadingState />
           ) : error ? (
             <ErrorState error={error} />
-          ) : schedules.length === 0 ? (
+          ) : configurations.length === 0 ? (
             <EmptyState
               title="Chưa có cấu hình"
               detail="Tạo cấu hình để lưu nguồn và giới hạn cho lượt chạy thủ công."
             />
           ) : (
-            schedules.map((schedule) => (
-              <div className="schedule-row" key={schedule.id}>
+            configurations.map((configuration) => (
+              <div className="configuration-row" key={configuration.id}>
                 <div>
-                  <strong>{schedule.source_id}</strong>
+                  <strong>{configuration.source_id}</strong>
                   <span>
-                    Chạy thủ công · tối đa {schedule.max_posts} bài ·{" "}
-                    {statusLabel(schedule.last_status)}
+                    Chạy thủ công · tối đa {configuration.max_posts} bài ·{" "}
+                    {statusLabel(configuration.last_status)}
                   </span>
-                  <span>Lần cuối: {formatDateTime(schedule.last_run_at)}</span>
-                  {schedule.last_error && (
-                    <span className="row-error">{schedule.last_error}</span>
+                  <span>
+                    Lần cuối: {formatDateTime(configuration.last_run_at)}
+                  </span>
+                  {configuration.last_error && (
+                    <span className="row-error">
+                      {configuration.last_error}
+                    </span>
                   )}
                 </div>
                 <div className="row-actions">
                   <button
                     className="icon-button"
                     type="button"
-                    onClick={() => runSchedule.mutate(schedule.id)}
+                    onClick={() =>
+                      runConfiguration.mutate(configuration.id)
+                    }
                     title="Chạy ngay"
                     aria-label="Chạy ngay"
                   >
@@ -378,9 +384,11 @@ function SchedulesPanel({
                   <button
                     className="icon-button danger-icon"
                     type="button"
-                    onClick={() => deleteSchedule.mutate(schedule.id)}
-                    title="Xóa lịch"
-                    aria-label="Xóa lịch"
+                    onClick={() =>
+                      deleteConfiguration.mutate(configuration.id)
+                    }
+                    title="Xóa cấu hình"
+                    aria-label="Xóa cấu hình"
                   >
                     <Trash2 size={17} />
                   </button>

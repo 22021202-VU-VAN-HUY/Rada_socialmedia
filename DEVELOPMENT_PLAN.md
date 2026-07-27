@@ -6,7 +6,7 @@ Run a local, account-based collection app that can retain authenticated platform
 profiles and collect authorized Facebook posts, comments, and replies in the
 background.
 
-Only platform connection, collection, storage, import, scheduling, and review are in
+Only platform connection, collection, storage, import, manual run configuration, and review are in
 scope.
 
 ## Delivered
@@ -18,9 +18,10 @@ scope.
   exchange, `/me` verification, and DPAPI-protected token storage.
 - Playwright Facebook collection without SendKeys, clipboard access, or foreground
   keyboard/mouse control.
-- Per-source schedules, Run now, job history, error state, and reauthentication state.
+- Saved per-source run configurations, manual Run now, job history, error state,
+  and reauthentication state.
 - JSON export followed by import into raw and normalized records.
-- Authenticated Streamlit views for overview, posts, comments, runs, and settings.
+- Authenticated React views for overview, posts, comments, runs, and settings.
 - Hidden local launcher plus an optional Windows logon task installer.
 - Manual foreground PowerShell crawler retained as fallback.
 
@@ -56,9 +57,12 @@ scope.
 - Facebook becomes connected only after the callback exchanges the code and verifies
   the Facebook account through Graph API `/me`.
 - Settings refreshes connection state automatically and has no manual Confirm step.
-- A disconnected connection disables its schedules but preserves the profile.
-- Deleting a schedule is a soft delete so collection history remains traceable.
-- TikTok and Threads cannot be scheduled until their collectors are implemented.
+- A disconnected connection disables its saved run configurations but preserves
+  the profile.
+- Deleting a run configuration is a soft delete so collection history remains
+  traceable.
+- TikTok and Threads cannot run until their collectors are implemented.
+- Collection jobs are created only by an explicit dashboard action.
 
 ## Next Collection Work
 
@@ -70,10 +74,10 @@ scope.
 
 ## Completion Criteria
 
-- Accounts cannot access another account's connections, schedules, or jobs.
+- Accounts cannot access another account's connections, run configurations, or jobs.
 - Passwords and bearer tokens are never stored in plaintext.
 - Facebook authorization is verified by OAuth callback; access tokens are never
   stored in plaintext.
-- A due schedule produces one job, one export, and imported records.
+- A manual run produces one job, one export, and imported records.
 - Login expiry changes the connection to `reauth_required`.
 - The dashboard reports queued, running, completed, failed, and disconnected states.

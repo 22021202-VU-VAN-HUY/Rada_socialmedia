@@ -121,28 +121,21 @@ class ConnectionActionResult(BaseModel):
     message: str
 
 
-class ScheduleCreate(BaseModel):
+class RunConfigurationCreate(BaseModel):
     connection_id: str
     source_id: str
-    enabled: bool = True
-    interval_minutes: int = Field(default=60, ge=5, le=10080)
     max_posts: int = Field(default=5, ge=1, le=200)
 
 
-class ScheduleUpdate(BaseModel):
-    enabled: bool | None = None
-    interval_minutes: int | None = Field(default=None, ge=5, le=10080)
+class RunConfigurationUpdate(BaseModel):
     max_posts: int | None = Field(default=None, ge=1, le=200)
 
 
-class ScheduleRead(BaseModel):
+class RunConfigurationRead(BaseModel):
     id: str
     connection_id: str
     source_id: str
-    enabled: bool
-    interval_minutes: int
     max_posts: int
-    next_run_at: datetime | None = None
     last_run_at: datetime | None = None
     last_status: str
     last_error: str | None = None
@@ -153,7 +146,7 @@ class ScheduleRead(BaseModel):
 
 class JobRead(BaseModel):
     id: str
-    schedule_id: str
+    run_configuration_id: str
     source_id: str
     status: str
     trigger: str
@@ -203,5 +196,5 @@ class OverviewRead(BaseModel):
     posts: int
     comments: int
     active_jobs: int
-    enabled_schedules: int
+    saved_configurations: int
     connected_platforms: int

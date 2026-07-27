@@ -3,9 +3,13 @@ from datetime import UTC, datetime
 from sqlalchemy.orm import Session
 
 from talent_radar.models import PlatformConnection, Source
-from talent_radar.schemas import ImportBatchRequest, ImportRecord, ScheduleCreate
+from talent_radar.schemas import (
+    ImportBatchRequest,
+    ImportRecord,
+    RunConfigurationCreate,
+)
 from talent_radar.services.auth import register_user
-from talent_radar.services.collection import create_schedule, enqueue_job
+from talent_radar.services.collection import create_run_configuration, enqueue_job
 from talent_radar.services.content_queries import count_content, list_content
 from talent_radar.services.import_adapter import run_import_batch
 
@@ -30,16 +34,15 @@ def _job_for_user(db: Session, email: str, suffix: str):
     )
     db.add_all([source, connection])
     db.commit()
-    schedule = create_schedule(
+    configuration = create_run_configuration(
         db,
         user,
-        ScheduleCreate(
+        RunConfigurationCreate(
             connection_id=connection.id,
             source_id=source.id,
-            enabled=False,
         ),
     )
-    return user, source, enqueue_job(db, user, schedule.id)
+    return user, source, enqueue_job(db, user, configuration.id)
 
 
 def test_content_queries_are_paginated_and_scoped_to_user(db: Session) -> None:

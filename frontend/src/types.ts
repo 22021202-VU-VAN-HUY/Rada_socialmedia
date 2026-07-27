@@ -45,7 +45,7 @@ export type ContentPage = {
 
 export type Job = {
   id: string;
-  schedule_id: string;
+  run_configuration_id: string;
   source_id: string;
   status: "queued" | "running" | "completed" | "failed";
   trigger: "manual" | "scheduled";
@@ -62,7 +62,7 @@ export type Overview = {
   posts: number;
   comments: number;
   active_jobs: number;
-  enabled_schedules: number;
+  saved_configurations: number;
   connected_platforms: number;
 };
 
@@ -96,14 +96,11 @@ export type ConnectionResult = {
   message: string;
 };
 
-export type Schedule = {
+export type RunConfiguration = {
   id: string;
   connection_id: string;
   source_id: string;
-  enabled: boolean;
-  interval_minutes: number;
   max_posts: number;
-  next_run_at: string | null;
   last_run_at: string | null;
   last_status: string;
   last_error: string | null;

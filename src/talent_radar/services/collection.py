@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 from zoneinfo import ZoneInfo
@@ -12,12 +12,16 @@ from sqlalchemy.orm import Session
 from talent_radar.core.config import Settings
 from talent_radar.models import (
     CollectionJob,
-    CollectionSchedule,
     PlatformConnection,
+    RunConfiguration,
     Source,
     User,
 )
-from talent_radar.schemas import ImportBatchRequest, ScheduleCreate, ScheduleUpdate
+from talent_radar.schemas import (
+    ImportBatchRequest,
+    RunConfigurationCreate,
+    RunConfigurationUpdate,
+)
 from talent_radar.services.facebook_collector import (
     FacebookCollector,
     LoginRequiredError,
@@ -33,77 +37,74 @@ class CollectionServiceError(ValueError):
     pass
 
 
-def create_schedule(
+def create_run_configuration(
     db: Session,
     user: User,
-    payload: ScheduleCreate,
-) -> CollectionSchedule:
+    payload: RunConfigurationCreate,
+) -> RunConfiguration:
     connection = _owned_connection(db, user.id, payload.connection_id)
     source = db.get(Source, payload.source_id)
     if source is None:
         raise CollectionServiceError("Khong tim thay nguon du lieu.")
     if connection.platform != source.platform:
         raise CollectionServiceError("Nen tang cua connection va source khong khop.")
-    now = datetime.now(UTC)
-    schedule = CollectionSchedule(
-        id=f"schedule_{uuid4().hex}",
+    configuration = RunConfiguration(
+        id=f"configuration_{uuid4().hex}",
         user_id=user.id,
         connection_id=connection.id,
         source_id=source.id,
-        enabled=payload.enabled,
-        interval_minutes=payload.interval_minutes,
         max_posts=payload.max_posts,
-        next_run_at=now if payload.enabled else None,
     )
-    db.add(schedule)
+    db.add(configuration)
     db.commit()
-    db.refresh(schedule)
-    return schedule
+    db.refresh(configuration)
+    return configuration
 
 
-def update_schedule(
+def update_run_configuration(
     db: Session,
     user: User,
-    schedule_id: str,
-    payload: ScheduleUpdate,
-) -> CollectionSchedule:
-    schedule = _owned_schedule(db, user.id, schedule_id)
-    if schedule.last_status == "deleted":
-        raise CollectionServiceError("Lich thu thap da bi xoa.")
+    configuration_id: str,
+    payload: RunConfigurationUpdate,
+) -> RunConfiguration:
+    configuration = _owned_run_configuration(db, user.id, configuration_id)
+    if configuration.last_status == "deleted":
+        raise CollectionServiceError("Cau hinh thu thap da bi xoa.")
     updates = payload.model_dump(exclude_none=True)
     for field, value in updates.items():
-        setattr(schedule, field, value)
-    if "enabled" in updates:
-        schedule.next_run_at = datetime.now(UTC) if schedule.enabled else None
+        setattr(configuration, field, value)
     db.commit()
-    db.refresh(schedule)
-    return schedule
+    db.refresh(configuration)
+    return configuration
 
 
-def delete_schedule(db: Session, user: User, schedule_id: str) -> None:
-    schedule = _owned_schedule(db, user.id, schedule_id)
-    schedule.enabled = False
-    schedule.next_run_at = None
-    schedule.last_status = "deleted"
-    schedule.last_error = None
+def delete_run_configuration(
+    db: Session,
+    user: User,
+    configuration_id: str,
+) -> None:
+    configuration = _owned_run_configuration(db, user.id, configuration_id)
+    configuration.enabled = False
+    configuration.next_run_at = None
+    configuration.last_status = "deleted"
+    configuration.last_error = None
     db.commit()
 
 
 def enqueue_job(
     db: Session,
     user: User,
-    schedule_id: str,
-    trigger: str = "manual",
+    configuration_id: str,
 ) -> CollectionJob:
-    schedule = _owned_schedule(db, user.id, schedule_id)
-    if schedule.last_status == "deleted":
-        raise CollectionServiceError("Lich thu thap da bi xoa.")
-    connection = _owned_connection(db, user.id, schedule.connection_id)
+    configuration = _owned_run_configuration(db, user.id, configuration_id)
+    if configuration.last_status == "deleted":
+        raise CollectionServiceError("Cau hinh thu thap da bi xoa.")
+    connection = _owned_connection(db, user.id, configuration.connection_id)
     if connection.status != "connected":
         raise CollectionServiceError("Nen tang chua duoc ket noi.")
     existing = db.scalar(
         select(CollectionJob).where(
-            CollectionJob.schedule_id == schedule.id,
+            CollectionJob.run_configuration_id == configuration.id,
             CollectionJob.status.in_(("queued", "running")),
         )
     )
@@ -112,11 +113,11 @@ def enqueue_job(
     job = CollectionJob(
         id=f"job_{uuid4().hex}",
         user_id=user.id,
-        schedule_id=schedule.id,
+        run_configuration_id=configuration.id,
         connection_id=connection.id,
-        source_id=schedule.source_id,
+        source_id=configuration.source_id,
         status="queued",
-        trigger=trigger,
+        trigger="manual",
     )
     db.add(job)
     db.commit()
@@ -156,66 +157,30 @@ def enqueue_default_facebook_group_job(
             "Khong tim thay Facebook group dang bat trong source registry."
         )
 
-    schedule = db.scalar(
-        select(CollectionSchedule)
+    configuration = db.scalar(
+        select(RunConfiguration)
         .where(
-            CollectionSchedule.user_id == user.id,
-            CollectionSchedule.connection_id == connection.id,
-            CollectionSchedule.source_id == source.id,
-            CollectionSchedule.last_status != "deleted",
+            RunConfiguration.user_id == user.id,
+            RunConfiguration.connection_id == connection.id,
+            RunConfiguration.source_id == source.id,
+            RunConfiguration.last_status != "deleted",
         )
-        .order_by(CollectionSchedule.created_at.desc())
+        .order_by(RunConfiguration.created_at.desc())
     )
-    if schedule is None:
-        schedule = create_schedule(
+    if configuration is None:
+        configuration = create_run_configuration(
             db,
             user,
-            ScheduleCreate(
+            RunConfigurationCreate(
                 connection_id=connection.id,
                 source_id=source.id,
-                enabled=False,
-                interval_minutes=1440,
                 max_posts=max_posts,
             ),
         )
-    elif schedule.max_posts != max_posts:
-        schedule.max_posts = max_posts
+    elif configuration.max_posts != max_posts:
+        configuration.max_posts = max_posts
         db.commit()
-    return enqueue_job(db, user, schedule.id, trigger="manual")
-
-
-def enqueue_due_schedules(db: Session) -> int:
-    now = datetime.now(UTC)
-    count = 0
-    schedules = db.scalars(
-        select(CollectionSchedule).where(CollectionSchedule.enabled.is_(True))
-    ).all()
-    for schedule in schedules:
-        next_run = _aware(schedule.next_run_at)
-        if next_run is not None and next_run > now:
-            continue
-        active = db.scalar(
-            select(CollectionJob).where(
-                CollectionJob.schedule_id == schedule.id,
-                CollectionJob.status.in_(("queued", "running")),
-            )
-        )
-        schedule.next_run_at = now + timedelta(minutes=schedule.interval_minutes)
-        if active is None:
-            db.add(
-                CollectionJob(
-                    id=f"job_{uuid4().hex}",
-                    user_id=schedule.user_id,
-                    schedule_id=schedule.id,
-                    connection_id=schedule.connection_id,
-                    source_id=schedule.source_id,
-                    status="queued",
-                    trigger="scheduled",
-                )
-            )
-            count += 1
-    db.commit()
-    return count
+    return enqueue_job(db, user, configuration.id)
 
 
 def next_queued_job(db: Session) -> CollectionJob | None:
@@ -228,17 +193,22 @@ def next_queued_job(db: Session) -> CollectionJob | None:
 
 
 def run_job(db: Session, settings: Settings, job: CollectionJob) -> None:
-    schedule = db.get(CollectionSchedule, job.schedule_id)
+    configuration = db.get(RunConfiguration, job.run_configuration_id)
     connection = db.get(PlatformConnection, job.connection_id)
     source = db.get(Source, job.source_id)
-    if schedule is None or connection is None or source is None:
-        _fail_job(db, job, schedule, "Job tham chieu du lieu khong con ton tai.")
+    if configuration is None or connection is None or source is None:
+        _fail_job(
+            db,
+            job,
+            configuration,
+            "Job tham chieu du lieu khong con ton tai.",
+        )
         return
 
     job.status = "running"
     job.started_at = datetime.now(UTC)
-    schedule.last_status = "running"
-    schedule.last_error = None
+    configuration.last_status = "running"
+    configuration.last_error = None
     db.commit()
 
     try:
@@ -248,16 +218,13 @@ def run_job(db: Session, settings: Settings, job: CollectionJob) -> None:
             raise CollectionServiceError(
                 f"Collector cho {connection.platform} chua duoc ho tro trong ban nay."
             )
-        if job.trigger == "manual":
-            local_now = datetime.now(ZoneInfo(settings.collection_timezone))
-            since = local_now.replace(
-                hour=0,
-                minute=0,
-                second=0,
-                microsecond=0,
-            ).astimezone(UTC)
-        else:
-            since = datetime.now(UTC) - timedelta(hours=source.lookback_hours)
+        local_now = datetime.now(ZoneInfo(settings.collection_timezone))
+        since = local_now.replace(
+            hour=0,
+            minute=0,
+            second=0,
+            microsecond=0,
+        ).astimezone(UTC)
         output_path = _new_export_path(
             settings.crawl_output_directory,
             job.id,
@@ -282,7 +249,7 @@ def run_job(db: Session, settings: Settings, job: CollectionJob) -> None:
         payload = FacebookCollector(settings).collect(
             connection,
             source,
-            schedule.max_posts,
+            configuration.max_posts,
             since=since,
             on_progress=persist_progress,
         )
@@ -302,17 +269,17 @@ def run_job(db: Session, settings: Settings, job: CollectionJob) -> None:
         job.output_path = str(output_path)
         connection.last_checked_at = datetime.now(UTC)
         connection.last_error = None
-        schedule.last_run_at = job.completed_at
-        schedule.last_status = "completed"
-        schedule.last_error = None
+        configuration.last_run_at = job.completed_at
+        configuration.last_status = "completed"
+        configuration.last_error = None
         db.commit()
     except LoginRequiredError as exc:
         connection.status = "reauth_required"
         connection.last_error = str(exc)
-        _fail_job(db, job, schedule, str(exc))
+        _fail_job(db, job, configuration, str(exc))
     except Exception as exc:
         connection.last_error = str(exc)
-        _fail_job(db, job, schedule, str(exc))
+        _fail_job(db, job, configuration, str(exc))
 
 
 def _new_export_path(directory: Path, job_id: str) -> Path:
@@ -331,16 +298,16 @@ def _write_export(path: Path, payload: dict) -> None:
 def _fail_job(
     db: Session,
     job: CollectionJob,
-    schedule: CollectionSchedule | None,
+    configuration: RunConfiguration | None,
     error: str,
 ) -> None:
     job.status = "failed"
     job.completed_at = datetime.now(UTC)
     job.error_summary = error[:4000]
-    if schedule is not None:
-        schedule.last_run_at = job.completed_at
-        schedule.last_status = "failed"
-        schedule.last_error = error[:4000]
+    if configuration is not None:
+        configuration.last_run_at = job.completed_at
+        configuration.last_status = "failed"
+        configuration.last_error = error[:4000]
     db.commit()
 
 
@@ -356,16 +323,20 @@ def _owned_connection(db: Session, user_id: str, connection_id: str) -> Platform
     return connection
 
 
-def _owned_schedule(db: Session, user_id: str, schedule_id: str) -> CollectionSchedule:
-    schedule = db.scalar(
-        select(CollectionSchedule).where(
-            CollectionSchedule.id == schedule_id,
-            CollectionSchedule.user_id == user_id,
+def _owned_run_configuration(
+    db: Session,
+    user_id: str,
+    configuration_id: str,
+) -> RunConfiguration:
+    configuration = db.scalar(
+        select(RunConfiguration).where(
+            RunConfiguration.id == configuration_id,
+            RunConfiguration.user_id == user_id,
         )
     )
-    if schedule is None:
-        raise CollectionServiceError("Khong tim thay lich thu thap.")
-    return schedule
+    if configuration is None:
+        raise CollectionServiceError("Khong tim thay cau hinh thu thap.")
+    return configuration
 
 
 def _aware(value: datetime | None) -> datetime | None:

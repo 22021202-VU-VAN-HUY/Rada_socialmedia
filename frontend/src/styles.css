@@ -987,32 +987,32 @@ label > input {
   border: 1px solid var(--border);
 }
 
-.schedule-layout {
+.configuration-layout {
   display: grid;
   grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
   gap: 24px;
 }
 
-.schedule-form,
-.schedule-list {
+.configuration-form,
+.configuration-list {
   min-width: 0;
   padding: 18px;
   background: #ffffff;
   border: 1px solid var(--border);
 }
 
-.schedule-form {
+.configuration-form {
   align-self: start;
   display: grid;
   gap: 14px;
 }
 
-.schedule-form .section-heading,
-.schedule-list .section-heading {
+.configuration-form .section-heading,
+.configuration-list .section-heading {
   margin-bottom: 4px;
 }
 
-.schedule-form label,
+.configuration-form label,
 .auth-panel label {
   display: grid;
   gap: 6px;
@@ -1021,59 +1021,7 @@ label > input {
   font-weight: 700;
 }
 
-.field-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-}
-
-.toggle-field {
-  width: fit-content;
-  display: flex !important;
-  grid-template-columns: none !important;
-  align-items: center;
-  gap: 9px !important;
-  cursor: pointer;
-}
-
-.toggle-field input {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  opacity: 0;
-}
-
-.toggle-switch {
-  position: relative;
-  width: 34px;
-  height: 20px;
-  flex: 0 0 34px;
-  background: #abb5bc;
-  border-radius: 10px;
-  transition: background 120ms ease;
-}
-
-.toggle-switch::after {
-  content: "";
-  position: absolute;
-  top: 3px;
-  left: 3px;
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: #ffffff;
-  transition: transform 120ms ease;
-}
-
-.toggle-field input:checked + .toggle-switch {
-  background: var(--green);
-}
-
-.toggle-field input:checked + .toggle-switch::after {
-  transform: translateX(14px);
-}
-
-.schedule-row {
+.configuration-row {
   min-height: 78px;
   padding: 12px 0;
   display: grid;
@@ -1083,29 +1031,25 @@ label > input {
   border-bottom: 1px solid var(--border);
 }
 
-.schedule-row:last-child {
+.configuration-row:last-child {
   border-bottom: 0;
 }
 
-.schedule-row > div:nth-child(2) {
+.configuration-row > div:nth-child(2) {
   min-width: 0;
   display: grid;
   gap: 3px;
 }
 
-.schedule-row strong {
+.configuration-row strong {
   color: #2d3a44;
   font-size: 13px;
   overflow-wrap: anywhere;
 }
 
-.schedule-row span {
+.configuration-row span {
   color: var(--muted);
   font-size: 11px;
-}
-
-.icon-only-toggle {
-  width: 34px;
 }
 
 .auth-shell {
@@ -1196,18 +1140,6 @@ label > input {
   animation: spin 900ms linear infinite;
 }
 
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
-}
-
 @keyframes spin {
   to {
     transform: rotate(360deg);
@@ -1244,7 +1176,7 @@ label > input {
     grid-column: 1 / -1;
   }
 
-  .schedule-layout {
+  .configuration-layout {
     grid-template-columns: 1fr;
   }
 }
@@ -1382,20 +1314,16 @@ label > input {
     border-bottom: 0;
   }
 
-  .field-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .schedule-form,
-  .schedule-list {
+  .configuration-form,
+  .configuration-list {
     padding: 14px;
   }
 
-  .schedule-row {
+  .configuration-row {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .schedule-row .row-actions {
+  .configuration-row .row-actions {
     grid-column: 1;
     justify-content: flex-start;
   }

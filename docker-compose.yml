@@ -32,20 +32,5 @@ services:
       db:
         condition: service_healthy
 
-  dashboard:
-    image: python:3.11-slim
-    working_dir: /app
-    command: >
-      sh -c "pip install -e . &&
-             streamlit run src/talent_radar/dashboard/app.py --server.address 0.0.0.0 --server.port 8501"
-    environment:
-      BACKEND_URL: http://api:8000
-    ports:
-      - "8501:8501"
-    volumes:
-      - .:/app
-    depends_on:
-      - api
-
 volumes:
   postgres_data:

@@ -5,7 +5,7 @@ import threading
 
 from talent_radar.core.config import Settings
 from talent_radar.core.database import SessionLocal
-from talent_radar.services.collection import enqueue_due_schedules, next_queued_job, run_job
+from talent_radar.services.collection import next_queued_job, run_job
 
 
 logger = logging.getLogger(__name__)
@@ -42,8 +42,6 @@ class BackgroundWorker:
 
     def run_once(self) -> None:
         with SessionLocal() as db:
-            if self.settings.automatic_schedules_enabled:
-                enqueue_due_schedules(db)
             job = next_queued_job(db)
             if job is not None:
                 run_job(db, self.settings, job)

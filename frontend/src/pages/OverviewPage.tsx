@@ -46,8 +46,8 @@ export function OverviewPage() {
             tone="blue"
           />
           <Metric
-            label="Lịch đang bật"
-            value={overview.data?.enabled_schedules || 0}
+            label="Cấu hình đã lưu"
+            value={overview.data?.saved_configurations || 0}
             icon={<CalendarClock size={20} />}
             tone="amber"
           />

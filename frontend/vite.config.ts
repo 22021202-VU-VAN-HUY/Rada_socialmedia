@@ -19,7 +19,7 @@ export default defineConfig({
       "/jobs": "http://127.0.0.1:8000",
       "/overview": "http://127.0.0.1:8000",
       "/posts": "http://127.0.0.1:8000",
-      "/schedules": "http://127.0.0.1:8000",
+      "/run-configurations": "http://127.0.0.1:8000",
       "/sources": "http://127.0.0.1:8000"
     }
   }

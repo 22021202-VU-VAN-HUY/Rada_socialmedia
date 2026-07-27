@@ -3,8 +3,6 @@ __pycache__/
 *.egg-info/
 .venv/
 .env
-.streamlit/secrets.toml
-streamlit-ui.*.log
 DEVELOPMENT_PLAN_V2.md
 DEVELOPMENT_PLAN_V3.md
 VIBECODE_KIT_V6_GUIDE.md

@@ -16,8 +16,8 @@ from talent_radar.core.database import create_all, get_db
 from talent_radar.models import (
     AuthSession,
     CollectionJob,
-    CollectionSchedule,
     PlatformConnection,
+    RunConfiguration,
     Source,
     User,
 )
@@ -30,9 +30,9 @@ from talent_radar.schemas import (
     JobRead,
     OverviewRead,
     PlatformConnectionRead,
-    ScheduleCreate,
-    ScheduleRead,
-    ScheduleUpdate,
+    RunConfigurationCreate,
+    RunConfigurationRead,
+    RunConfigurationUpdate,
     SourceCreate,
     SourceRead,
     UserCredentials,
@@ -57,11 +57,11 @@ from talent_radar.services.browser_profiles import (
 )
 from talent_radar.services.collection import (
     CollectionServiceError,
-    create_schedule as create_collection_schedule,
-    delete_schedule as delete_collection_schedule,
+    create_run_configuration,
+    delete_run_configuration,
     enqueue_default_facebook_group_job,
     enqueue_job,
-    update_schedule as update_collection_schedule,
+    update_run_configuration,
 )
 from talent_radar.services.content_queries import count_content, list_content
 from talent_radar.services.facebook_oauth import (
@@ -310,15 +310,15 @@ def disconnect_platform(
             for key, value in metadata.items()
             if not key.startswith("facebook_") and not key.startswith("oauth_")
         }
-    schedules = db.scalars(
-        select(CollectionSchedule).where(
-            CollectionSchedule.user_id == user.id,
-            CollectionSchedule.connection_id == connection.id,
+    configurations = db.scalars(
+        select(RunConfiguration).where(
+            RunConfiguration.user_id == user.id,
+            RunConfiguration.connection_id == connection.id,
         )
     ).all()
-    for schedule in schedules:
-        schedule.enabled = False
-        schedule.next_run_at = None
+    for configuration in configurations:
+        configuration.enabled = False
+        configuration.next_run_at = None
     db.commit()
     db.refresh(connection)
     return ConnectionActionResult(
@@ -327,69 +327,79 @@ def disconnect_platform(
     )
 
 
-@app.get("/schedules", response_model=list[ScheduleRead])
-def list_schedules(
+@app.get("/run-configurations", response_model=list[RunConfigurationRead])
+def list_run_configurations(
     user: User = Depends(current_user),
     db: Session = Depends(get_db),
-) -> list[CollectionSchedule]:
+) -> list[RunConfiguration]:
     return list(
         db.scalars(
-            select(CollectionSchedule)
+            select(RunConfiguration)
             .where(
-                CollectionSchedule.user_id == user.id,
-                CollectionSchedule.last_status != "deleted",
+                RunConfiguration.user_id == user.id,
+                RunConfiguration.last_status != "deleted",
             )
-            .order_by(CollectionSchedule.created_at.desc())
+            .order_by(RunConfiguration.created_at.desc())
         ).all()
     )
 
 
-@app.post("/schedules", response_model=ScheduleRead, status_code=201)
-def create_schedule(
-    payload: ScheduleCreate,
+@app.post(
+    "/run-configurations",
+    response_model=RunConfigurationRead,
+    status_code=201,
+)
+def create_configuration(
+    payload: RunConfigurationCreate,
     user: User = Depends(current_user),
     db: Session = Depends(get_db),
-) -> CollectionSchedule:
+) -> RunConfiguration:
     try:
-        return create_collection_schedule(db, user, payload)
+        return create_run_configuration(db, user, payload)
     except CollectionServiceError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-@app.patch("/schedules/{schedule_id}", response_model=ScheduleRead)
-def update_schedule(
-    schedule_id: str,
-    payload: ScheduleUpdate,
+@app.patch(
+    "/run-configurations/{configuration_id}",
+    response_model=RunConfigurationRead,
+)
+def update_configuration(
+    configuration_id: str,
+    payload: RunConfigurationUpdate,
     user: User = Depends(current_user),
     db: Session = Depends(get_db),
-) -> CollectionSchedule:
+) -> RunConfiguration:
     try:
-        return update_collection_schedule(db, user, schedule_id, payload)
+        return update_run_configuration(db, user, configuration_id, payload)
     except CollectionServiceError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
-@app.delete("/schedules/{schedule_id}", status_code=204)
-def delete_schedule(
-    schedule_id: str,
+@app.delete("/run-configurations/{configuration_id}", status_code=204)
+def delete_configuration(
+    configuration_id: str,
     user: User = Depends(current_user),
     db: Session = Depends(get_db),
 ) -> Response:
     try:
-        delete_collection_schedule(db, user, schedule_id)
+        delete_run_configuration(db, user, configuration_id)
     except CollectionServiceError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return Response(status_code=204)
 
 
-@app.post("/schedules/{schedule_id}/run-now", response_model=JobRead)
-def run_schedule_now(
-    schedule_id: str,
+@app.post(
+    "/run-configurations/{configuration_id}/run-now",
+    response_model=JobRead,
+)
+def run_configuration_now(
+    configuration_id: str,
     user: User = Depends(current_user),
     db: Session = Depends(get_db),
 ) -> CollectionJob:
     try:
-        return enqueue_job(db, user, schedule_id)
+        return enqueue_job(db, user, configuration_id)
     except CollectionServiceError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -502,13 +512,12 @@ def overview(
             CollectionJob.status.in_(("queued", "running")),
         )
     )
-    enabled_schedules = db.scalar(
+    saved_configurations = db.scalar(
         select(func.count())
-        .select_from(CollectionSchedule)
+        .select_from(RunConfiguration)
         .where(
-            CollectionSchedule.user_id == user.id,
-            CollectionSchedule.enabled.is_(True),
-            CollectionSchedule.last_status != "deleted",
+            RunConfiguration.user_id == user.id,
+            RunConfiguration.last_status != "deleted",
         )
     )
     connected_platforms = db.scalar(
@@ -523,7 +532,7 @@ def overview(
         posts=count_content(db, user, kind="posts"),
         comments=count_content(db, user, kind="comments"),
         active_jobs=active_jobs or 0,
-        enabled_schedules=enabled_schedules or 0,
+        saved_configurations=saved_configurations or 0,
         connected_platforms=connected_platforms or 0,
     )
 

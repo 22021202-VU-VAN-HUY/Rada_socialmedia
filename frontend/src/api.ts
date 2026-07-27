@@ -5,7 +5,7 @@ import type {
   ContentPage,
   Job,
   Overview,
-  Schedule,
+  RunConfiguration,
   Source,
   User,
 } from "./types";
@@ -118,27 +118,21 @@ export const api = {
     request<ConnectionResult>(`/connections/${platform}/disconnect`, {
       method: "POST",
     }),
-  schedules: () => request<Schedule[]>("/schedules"),
-  createSchedule: (payload: {
+  runConfigurations: () =>
+    request<RunConfiguration[]>("/run-configurations"),
+  createRunConfiguration: (payload: {
     connection_id: string;
     source_id: string;
-    interval_minutes: number;
     max_posts: number;
-    enabled: boolean;
   }) =>
-    request<Schedule>("/schedules", {
+    request<RunConfiguration>("/run-configurations", {
       method: "POST",
       body: JSON.stringify(payload),
     }),
-  updateSchedule: (id: string, payload: Partial<Schedule>) =>
-    request<Schedule>(`/schedules/${id}`, {
-      method: "PATCH",
-      body: JSON.stringify(payload),
-    }),
-  deleteSchedule: (id: string) =>
-    request<void>(`/schedules/${id}`, { method: "DELETE" }),
-  runSchedule: (id: string) =>
-    request<Job>(`/schedules/${id}/run-now`, { method: "POST" }),
+  deleteRunConfiguration: (id: string) =>
+    request<void>(`/run-configurations/${id}`, { method: "DELETE" }),
+  runConfiguration: (id: string) =>
+    request<Job>(`/run-configurations/${id}/run-now`, { method: "POST" }),
   collectFacebook: () =>
     request<Job>("/collection/facebook/run-now", { method: "POST" }),
 };

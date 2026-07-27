@@ -2,7 +2,7 @@
 
 Talent Radar is a local Windows app for collecting Facebook posts, comments, and
 replies through the existing Coc Coc profile selected in configuration. It provides local user accounts,
-platform connection settings, collection schedules, background jobs, JSON exports,
+platform connection settings, saved run configurations, background jobs, JSON exports,
 and database import.
 
 The current collector is read-only. It does not post, react, message, or modify
@@ -92,9 +92,8 @@ Stop only the processes recorded by Talent Radar:
 
 Runtime logs and PID files are stored under `data/runtime`.
 
-Automatic schedule enqueueing is disabled by default
-(`AUTOMATIC_SCHEDULES_ENABLED=false`). The background worker processes only jobs
-that were explicitly queued from the dashboard.
+The background worker processes only jobs that were explicitly queued from the
+dashboard. There is no automatic schedule enqueueing path.
 
 ## Connect Facebook
 
@@ -151,15 +150,16 @@ Core endpoints:
 - `POST /connections/{platform}/connect`
 - `GET /connections/facebook/callback`
 - `POST /connections/{platform}/disconnect`
-- `GET|POST /schedules`
-- `PATCH|DELETE /schedules/{id}`
-- `POST /schedules/{id}/run-now`
+- `GET|POST /run-configurations`
+- `PATCH|DELETE /run-configurations/{id}`
+- `POST /run-configurations/{id}/run-now`
 - `GET /jobs`
 - `GET /overview`, `GET /posts`, `GET /comments`
 - `GET /sources`, `POST /sources/sync`
 - `POST /imports`
 
-Connection, schedule, and job endpoints require the bearer token returned by login.
+Connection, run-configuration, and job endpoints require the bearer token returned
+by login.
 
 ## Manual Fallback
 

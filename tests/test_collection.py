@@ -1,5 +1,5 @@
 import json
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -9,22 +9,21 @@ from sqlalchemy.orm import Session
 from talent_radar.core.config import Settings
 from talent_radar.models import (
     CollectionJob,
-    CollectionSchedule,
     PlatformConnection,
     RawItem,
+    RunConfiguration,
     Source,
 )
-from talent_radar.schemas import ScheduleCreate, ScheduleUpdate
+from talent_radar.schemas import RunConfigurationCreate, RunConfigurationUpdate
 from talent_radar.services.auth import register_user
 from talent_radar.services.collection import (
     CollectionServiceError,
-    create_schedule,
-    delete_schedule,
+    create_run_configuration,
+    delete_run_configuration,
     enqueue_default_facebook_group_job,
-    enqueue_due_schedules,
     enqueue_job,
     run_job,
-    update_schedule,
+    update_run_configuration,
 )
 
 
@@ -55,36 +54,28 @@ def add_source_and_connection(
     return source, connection
 
 
-def test_user_cannot_update_another_users_schedule(db: Session) -> None:
+def test_user_cannot_update_another_users_configuration(db: Session) -> None:
     owner = register_user(db, "owner@example.com", "correct-horse-2026")
     stranger = register_user(db, "stranger@example.com", "correct-horse-2026")
     source, connection = add_source_and_connection(db, owner.id)
-    schedule = create_schedule(
+    configuration = create_run_configuration(
         db,
         owner,
-        ScheduleCreate(connection_id=connection.id, source_id=source.id),
+        RunConfigurationCreate(
+            connection_id=connection.id,
+            source_id=source.id,
+        ),
     )
 
     with pytest.raises(CollectionServiceError):
-        update_schedule(db, stranger, schedule.id, ScheduleUpdate(enabled=False))
+        update_run_configuration(
+            db,
+            stranger,
+            configuration.id,
+            RunConfigurationUpdate(max_posts=10),
+        )
     with pytest.raises(CollectionServiceError):
-        enqueue_job(db, stranger, schedule.id)
-
-
-def test_due_schedule_is_enqueued_only_once(db: Session) -> None:
-    user = register_user(db, "huy@example.com", "correct-horse-2026")
-    source, connection = add_source_and_connection(db, user.id)
-    schedule = create_schedule(
-        db,
-        user,
-        ScheduleCreate(connection_id=connection.id, source_id=source.id, interval_minutes=30),
-    )
-    schedule.next_run_at = datetime.now(UTC) - timedelta(minutes=1)
-    db.commit()
-
-    assert enqueue_due_schedules(db) == 1
-    assert enqueue_due_schedules(db) == 0
-    assert len(db.scalars(select(CollectionJob)).all()) == 1
+        enqueue_job(db, stranger, configuration.id)
 
 
 def test_default_facebook_group_action_creates_one_manual_background_job(
@@ -96,37 +87,41 @@ def test_default_facebook_group_action_creates_one_manual_background_job(
     first = enqueue_default_facebook_group_job(db, user)
     second = enqueue_default_facebook_group_job(db, user)
 
-    schedule = db.scalar(
-        select(CollectionSchedule).where(CollectionSchedule.id == first.schedule_id)
+    configuration = db.scalar(
+        select(RunConfiguration).where(
+            RunConfiguration.id == first.run_configuration_id
+        )
     )
     assert first.id == second.id
     assert first.status == "queued"
     assert first.trigger == "manual"
     assert first.source_id == source.id
-    assert schedule is not None
-    assert schedule.enabled is False
-    assert schedule.interval_minutes == 1440
-    assert schedule.max_posts == 200
+    assert configuration is not None
+    assert configuration.enabled is False
+    assert configuration.max_posts == 200
 
 
-def test_delete_schedule_preserves_job_history(db: Session) -> None:
+def test_delete_configuration_preserves_job_history(db: Session) -> None:
     user = register_user(db, "history@example.com", "correct-horse-2026")
     source, connection = add_source_and_connection(db, user.id, suffix="history")
-    schedule = create_schedule(
+    configuration = create_run_configuration(
         db,
         user,
-        ScheduleCreate(connection_id=connection.id, source_id=source.id),
+        RunConfigurationCreate(
+            connection_id=connection.id,
+            source_id=source.id,
+        ),
     )
-    job = enqueue_job(db, user, schedule.id)
+    job = enqueue_job(db, user, configuration.id)
 
-    delete_schedule(db, user, schedule.id)
+    delete_run_configuration(db, user, configuration.id)
 
-    db.refresh(schedule)
-    assert schedule.last_status == "deleted"
-    assert schedule.enabled is False
+    db.refresh(configuration)
+    assert configuration.last_status == "deleted"
+    assert configuration.enabled is False
     assert db.get(CollectionJob, job.id) is not None
     with pytest.raises(CollectionServiceError):
-        enqueue_job(db, user, schedule.id)
+        enqueue_job(db, user, configuration.id)
 
 
 def test_facebook_job_writes_export_and_imports_records(
@@ -136,12 +131,15 @@ def test_facebook_job_writes_export_and_imports_records(
 ) -> None:
     user = register_user(db, "huy@example.com", "correct-horse-2026")
     source, connection = add_source_and_connection(db, user.id)
-    schedule = create_schedule(
+    configuration = create_run_configuration(
         db,
         user,
-        ScheduleCreate(connection_id=connection.id, source_id=source.id),
+        RunConfigurationCreate(
+            connection_id=connection.id,
+            source_id=source.id,
+        ),
     )
-    job = enqueue_job(db, user, schedule.id)
+    job = enqueue_job(db, user, configuration.id)
     progress_snapshots = []
     progress_database_counts = []
 

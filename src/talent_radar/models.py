@@ -64,15 +64,15 @@ class OAuthState(TimestampMixin, Base):
     used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
-class CollectionSchedule(TimestampMixin, Base):
+class RunConfiguration(TimestampMixin, Base):
     __tablename__ = "collection_schedules"
 
     id: Mapped[str] = mapped_column(String(120), primary_key=True)
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
     connection_id: Mapped[str] = mapped_column(ForeignKey("platform_connections.id"), index=True)
     source_id: Mapped[str] = mapped_column(ForeignKey("sources.id"), index=True)
-    enabled: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
-    interval_minutes: Mapped[int] = mapped_column(Integer, default=60)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    interval_minutes: Mapped[int] = mapped_column(Integer, default=1440)
     max_posts: Mapped[int] = mapped_column(Integer, default=5)
     next_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
     last_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -85,11 +85,15 @@ class CollectionJob(TimestampMixin, Base):
 
     id: Mapped[str] = mapped_column(String(120), primary_key=True)
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
-    schedule_id: Mapped[str] = mapped_column(ForeignKey("collection_schedules.id"), index=True)
+    run_configuration_id: Mapped[str] = mapped_column(
+        "schedule_id",
+        ForeignKey("collection_schedules.id"),
+        index=True,
+    )
     connection_id: Mapped[str] = mapped_column(ForeignKey("platform_connections.id"), index=True)
     source_id: Mapped[str] = mapped_column(ForeignKey("sources.id"), index=True)
     status: Mapped[str] = mapped_column(String(40), default="queued", index=True)
-    trigger: Mapped[str] = mapped_column(String(40), default="scheduled")
+    trigger: Mapped[str] = mapped_column(String(40), default="manual")
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     posts_collected: Mapped[int] = mapped_column(Integer, default=0)
