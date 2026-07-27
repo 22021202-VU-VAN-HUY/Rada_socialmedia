@@ -10,8 +10,10 @@ Platform = Literal["facebook", "tiktok", "threads", "manual"]
 class SourceBase(BaseModel):
     id: str
     platform: Platform
+    external_id: str | None = None
     source_kind: str = "unknown"
     source_name: str
+    handle: str | None = None
     source_url: str | None = None
     source_type: str = "public_earned"
     access_basis: str = "pending"
@@ -24,6 +26,7 @@ class SourceBase(BaseModel):
     comment_policy: dict[str, Any] = Field(default_factory=dict)
     privacy: dict[str, Any] = Field(default_factory=dict)
     owner: dict[str, Any] = Field(default_factory=dict)
+    platform_metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class SourceCreate(SourceBase):
@@ -44,6 +47,7 @@ class ImportRecord(BaseModel):
     content_text: str
     external_id: str | None = None
     parent_external_id: str | None = None
+    root_external_id: str | None = None
     parent_item_id: str | None = None
     permalink: str | None = None
     import_batch_id: str | None = None
@@ -51,6 +55,23 @@ class ImportRecord(BaseModel):
     collected_at: datetime | None = None
     author_id: str | None = None
     author_hash: str | None = None
+    author_display_name: str | None = None
+    author_username: str | None = None
+    author_profile_url: str | None = None
+    content_language: str | None = None
+    reaction_count: int = 0
+    like_count: int = 0
+    comment_count: int = 0
+    collected_comment_count: int = 0
+    reply_count: int = 0
+    share_count: int = 0
+    view_count: int = 0
+    save_count: int = 0
+    topic: str | None = None
+    matched_terms: list[str] = Field(default_factory=list)
+    matched_groups: list[str] = Field(default_factory=list)
+    topic_score: float = 1.0
+    platform_metadata: dict[str, Any] = Field(default_factory=dict)
     raw_metadata: dict[str, Any] = Field(default_factory=dict)
 
     @model_validator(mode="before")
@@ -125,10 +146,18 @@ class RunConfigurationCreate(BaseModel):
     connection_id: str
     source_id: str
     max_posts: int = Field(default=5, ge=1, le=200)
+    max_comments_per_post: int = Field(default=100, ge=0, le=5000)
+    lookback_hours: int = Field(default=24, ge=1, le=24 * 365)
+    include_replies: bool = True
+    filters: dict[str, Any] = Field(default_factory=dict)
 
 
 class RunConfigurationUpdate(BaseModel):
     max_posts: int | None = Field(default=None, ge=1, le=200)
+    max_comments_per_post: int | None = Field(default=None, ge=0, le=5000)
+    lookback_hours: int | None = Field(default=None, ge=1, le=24 * 365)
+    include_replies: bool | None = None
+    filters: dict[str, Any] | None = None
 
 
 class RunConfigurationRead(BaseModel):
@@ -136,6 +165,10 @@ class RunConfigurationRead(BaseModel):
     connection_id: str
     source_id: str
     max_posts: int
+    max_comments_per_post: int
+    lookback_hours: int
+    include_replies: bool
+    filters: dict[str, Any]
     last_run_at: datetime | None = None
     last_status: str
     last_error: str | None = None
@@ -148,12 +181,16 @@ class JobRead(BaseModel):
     id: str
     run_configuration_id: str
     source_id: str
+    platform: str
     status: str
     trigger: str
     started_at: datetime | None = None
     completed_at: datetime | None = None
     posts_collected: int
     comments_collected: int
+    replies_collected: int
+    records_inserted: int
+    duplicates_skipped: int
     output_path: str | None = None
     error_summary: str | None = None
     created_at: datetime | None = None

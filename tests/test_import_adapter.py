@@ -6,7 +6,14 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 
 from talent_radar.core.database import Base
-from talent_radar.models import NormalizedItem, RawItem, Source
+from talent_radar.models import (
+    ContentMetricSnapshot,
+    ContentTopicMatch,
+    NormalizedItem,
+    RawItem,
+    SocialAccount,
+    Source,
+)
 from talent_radar.schemas import ImportBatchRequest, ImportRecord
 from talent_radar.services.import_adapter import load_import_file, run_import_batch
 
@@ -125,6 +132,75 @@ def test_run_import_batch_inserts_raw_and_normalized_items() -> None:
     assert normalized_item.raw_item_id == raw_item.id
     assert normalized_item.author_hash is not None
     assert normalized_item.provenance_status == "complete"
+
+
+def test_multiplatform_import_normalizes_author_metrics_and_topics() -> None:
+    db = _session()
+    db.add(
+        Source(
+            id="threads_profile_vsf",
+            platform="threads",
+            external_id="vsf",
+            source_kind="profile",
+            source_name="VSF",
+            source_url="https://www.threads.net/@vsf",
+        )
+    )
+    db.commit()
+
+    run_import_batch(
+        db,
+        ImportBatchRequest(
+            records=[
+                ImportRecord(
+                    source_id="threads_profile_vsf",
+                    platform="threads",
+                    item_type="post",
+                    external_id="thread_1",
+                    content_text="Vinsmart Future update",
+                    author_id="account_123",
+                    author_display_name="VSF Team",
+                    author_username="vsf",
+                    reaction_count=12,
+                    comment_count=3,
+                    view_count=120,
+                    topic="vsf",
+                    matched_terms=["Vinsmart Future"],
+                ),
+                ImportRecord(
+                    source_id="threads_profile_vsf",
+                    platform="threads",
+                    item_type="comment",
+                    external_id="reply_1",
+                    parent_external_id="thread_1",
+                    root_external_id="thread_1",
+                    content_text="Interested",
+                    author_display_name="Reader",
+                ),
+            ]
+        ),
+    )
+
+    items = db.scalars(select(NormalizedItem).order_by(NormalizedItem.item_type.desc())).all()
+    post = next(item for item in items if item.item_type == "post")
+    comment = next(item for item in items if item.item_type == "comment")
+    metric = db.scalar(
+        select(ContentMetricSnapshot).where(
+            ContentMetricSnapshot.content_item_id == post.id
+        )
+    )
+    topic = db.scalar(
+        select(ContentTopicMatch).where(ContentTopicMatch.content_item_id == post.id)
+    )
+    account = db.scalar(
+        select(SocialAccount).where(SocialAccount.id == post.author_id)
+    )
+
+    assert comment.parent_item_id == post.id
+    assert comment.root_item_id == post.id
+    assert account is not None and account.username == "vsf"
+    assert metric is not None and metric.view_count == 120
+    assert topic is not None and topic.matched_terms == ["Vinsmart Future"]
 
 
 def test_run_import_batch_skips_duplicate_content() -> None:

@@ -20,6 +20,7 @@ services:
     working_dir: /app
     command: >
       sh -c "pip install -e . &&
+             alembic upgrade head &&
              uvicorn talent_radar.api.main:app --host 0.0.0.0 --port 8000"
     environment:
       DATABASE_URL: postgresql+psycopg://talent_radar:talent_radar@db:5432/talent_radar

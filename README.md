@@ -27,6 +27,9 @@ are not implemented in this release.
 
 ## Setup
 
+PostgreSQL 16 runs through Docker Desktop and is the application database. The
+legacy SQLite file is no longer used at runtime.
+
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
@@ -34,8 +37,9 @@ python -m pip install -e ".[dev]"
 Copy-Item .env.example .env
 ```
 
-The default local database is `data/talent_radar.sqlite3`. Set Coc Coc as the
-Windows default browser. Talent Radar opens every app, login, and OAuth URL through
+The default database URL is
+`postgresql+psycopg://talent_radar:talent_radar@localhost:5432/talent_radar`.
+Set Coc Coc as the Windows default browser. Talent Radar opens every app, login, and OAuth URL through
 the Windows browser association, so Coc Coc reuses its installed default profile.
 `COCCOC_USER_DATA_DIRECTORY` and `COCCOC_PROFILE_DIRECTORY` are read only to verify
 that the configured profile exists; Talent Radar does not create another browser
@@ -65,6 +69,8 @@ Open Talent Radar.cmd
 This starts the API and worker as hidden processes, then asks Windows to open
 `http://localhost:8000` in the default browser. When Coc Coc is the Windows default,
 it reuses Coc Coc's current default profile. VSCode's browser is not used.
+The launcher starts PostgreSQL, applies pending Alembic migrations, and then starts
+the API.
 
 The PowerShell equivalent is:
 
@@ -130,6 +136,25 @@ Invoke-RestMethod -Method Post http://localhost:8000/sources/sync
 ```
 
 The included registry contains the public Facebook group from `textlinkmau.txt`.
+
+## Database
+
+The shared Facebook, TikTok, and Threads schema is documented in
+[`docs/data-model.md`](docs/data-model.md). It normalizes sources, authors, content
+relationships, metric snapshots, and topic matches while retaining original
+platform payloads in JSONB.
+
+To move an existing local SQLite database into a new PostgreSQL volume:
+
+```powershell
+docker compose up -d db
+python -m alembic upgrade head
+python scripts/migrate_sqlite_to_postgres.py `
+  --source data/talent_radar.sqlite3 `
+  --target-url postgresql+psycopg://talent_radar:talent_radar@localhost:5432/talent_radar
+```
+
+The SQLite source remains unchanged as a backup.
 
 ## VSF Topic Filter
 

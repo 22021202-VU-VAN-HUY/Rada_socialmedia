@@ -7,7 +7,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     app_env: str = "local"
     backend_url: str = "http://localhost:8000"
-    database_url: str = "sqlite:///data/talent_radar.sqlite3"
+    database_url: str = (
+        "postgresql+psycopg://talent_radar:talent_radar@localhost:5432/talent_radar"
+    )
     source_registry_path: Path = Path("config/source_registry.example.yaml")
 
     crawl_lookback_hours: int = 24

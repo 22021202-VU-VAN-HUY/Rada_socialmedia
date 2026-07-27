@@ -1,6 +1,7 @@
 sources:
   - id: fb_group_laptrinhvienit
     platform: facebook
+    external_id: "346082662075299"
     source_kind: group
     source_name: "Tuyen dung - Tim viec IT"
     source_url: "https://www.facebook.com/groups/346082662075299/"

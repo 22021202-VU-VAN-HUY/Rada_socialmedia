@@ -97,7 +97,7 @@ def test_default_facebook_group_action_creates_one_manual_background_job(
     assert first.trigger == "manual"
     assert first.source_id == source.id
     assert configuration is not None
-    assert configuration.enabled is False
+    assert configuration.is_archived is False
     assert configuration.max_posts == 200
 
 
@@ -118,7 +118,7 @@ def test_delete_configuration_preserves_job_history(db: Session) -> None:
 
     db.refresh(configuration)
     assert configuration.last_status == "deleted"
-    assert configuration.enabled is False
+    assert configuration.is_archived is True
     assert db.get(CollectionJob, job.id) is not None
     with pytest.raises(CollectionServiceError):
         enqueue_job(db, user, configuration.id)

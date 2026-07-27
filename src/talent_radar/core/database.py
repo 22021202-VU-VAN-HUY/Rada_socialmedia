@@ -1,5 +1,8 @@
 from collections.abc import Generator
+from pathlib import Path
 
+from alembic import command
+from alembic.config import Config
 from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
@@ -13,7 +16,7 @@ class Base(DeclarativeBase):
 def _engine_kwargs(database_url: str) -> dict:
     if database_url.startswith("sqlite"):
         return {"connect_args": {"check_same_thread": False}}
-    return {}
+    return {"pool_pre_ping": True}
 
 
 settings = get_settings()
@@ -29,7 +32,8 @@ def get_db() -> Generator[Session, None, None]:
         db.close()
 
 
-def create_all() -> None:
-    from talent_radar import models  # noqa: F401
-
-    Base.metadata.create_all(bind=engine)
+def upgrade_database() -> None:
+    project_root = Path(__file__).resolve().parents[3]
+    alembic_config = Config(project_root / "alembic.ini")
+    alembic_config.set_main_option("sqlalchemy.url", settings.database_url.replace("%", "%%"))
+    command.upgrade(alembic_config, "head")

@@ -6,7 +6,15 @@ from math import ceil
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from talent_radar.models import CollectionJob, NormalizedItem, RawItem, Source, User
+from talent_radar.models import (
+    ContentItem,
+    ContentMetricSnapshot,
+    ContentTopicMatch,
+    RawItem,
+    SocialAccount,
+    Source,
+    User,
+)
 from talent_radar.schemas import ContentItemRead, ContentPage
 
 
@@ -23,45 +31,72 @@ def list_content(
     post_external_id: str | None = None,
 ) -> ContentPage:
     item_types = ("post",) if kind == "posts" else ("comment", "reply")
-    owned_batches = select(CollectionJob.id).where(CollectionJob.user_id == user.id)
     conditions = [
-        NormalizedItem.item_type.in_(item_types),
-        NormalizedItem.import_batch_id.in_(owned_batches),
+        ContentItem.item_type.in_(item_types),
+        ContentItem.owner_user_id == user.id,
     ]
     if search:
-        conditions.append(NormalizedItem.content_text.ilike(f"%{search.strip()}%"))
+        query = search.strip()
+        if db.bind is not None and db.bind.dialect.name == "postgresql":
+            conditions.append(
+                func.to_tsvector("simple", ContentItem.content_text).op("@@")(
+                    func.plainto_tsquery("simple", query)
+                )
+            )
+        else:
+            conditions.append(ContentItem.content_text.ilike(f"%{query}%"))
     if source_id:
-        conditions.append(NormalizedItem.source_id == source_id)
+        conditions.append(ContentItem.source_id == source_id)
     if published_after:
         conditions.append(
-            func.coalesce(
-                NormalizedItem.published_at,
-                NormalizedItem.collected_at,
-            )
+            func.coalesce(ContentItem.published_at, ContentItem.collected_at)
             >= published_after
         )
     if post_external_id and kind == "comments":
         conditions.append(RawItem.parent_external_id == post_external_id)
 
+    latest_metric_id = (
+        select(ContentMetricSnapshot.id)
+        .where(ContentMetricSnapshot.content_item_id == ContentItem.id)
+        .order_by(ContentMetricSnapshot.observed_at.desc())
+        .limit(1)
+        .correlate(ContentItem)
+        .scalar_subquery()
+    )
+    first_topic_id = (
+        select(ContentTopicMatch.id)
+        .where(ContentTopicMatch.content_item_id == ContentItem.id)
+        .order_by(ContentTopicMatch.score.desc(), ContentTopicMatch.created_at)
+        .limit(1)
+        .correlate(ContentItem)
+        .scalar_subquery()
+    )
     base = (
-        select(NormalizedItem, RawItem, Source)
-        .join(RawItem, RawItem.id == NormalizedItem.raw_item_id)
-        .join(Source, Source.id == NormalizedItem.source_id)
+        select(
+            ContentItem,
+            RawItem,
+            Source,
+            SocialAccount,
+            ContentMetricSnapshot,
+            ContentTopicMatch,
+        )
+        .join(RawItem, RawItem.id == ContentItem.raw_item_id)
+        .join(Source, Source.id == ContentItem.source_id)
+        .outerjoin(SocialAccount, SocialAccount.id == ContentItem.author_id)
+        .outerjoin(ContentMetricSnapshot, ContentMetricSnapshot.id == latest_metric_id)
+        .outerjoin(ContentTopicMatch, ContentTopicMatch.id == first_topic_id)
         .where(*conditions)
     )
     total = db.scalar(select(func.count()).select_from(base.subquery())) or 0
     rows = db.execute(
         base.order_by(
-            func.coalesce(
-                NormalizedItem.published_at,
-                NormalizedItem.collected_at,
-            ).desc(),
-            NormalizedItem.created_at.desc(),
+            func.coalesce(ContentItem.published_at, ContentItem.collected_at).desc(),
+            ContentItem.created_at.desc(),
         )
         .offset((page - 1) * page_size)
         .limit(page_size)
     ).all()
-    items = [_content_item(normalized, raw, source) for normalized, raw, source in rows]
+    items = [_content_item(*row) for row in rows]
     return ContentPage(
         items=items,
         total=total,
@@ -73,14 +108,13 @@ def list_content(
 
 def count_content(db: Session, user: User, *, kind: str) -> int:
     item_types = ("post",) if kind == "posts" else ("comment", "reply")
-    owned_batches = select(CollectionJob.id).where(CollectionJob.user_id == user.id)
     return (
         db.scalar(
             select(func.count())
-            .select_from(NormalizedItem)
+            .select_from(ContentItem)
             .where(
-                NormalizedItem.item_type.in_(item_types),
-                NormalizedItem.import_batch_id.in_(owned_batches),
+                ContentItem.item_type.in_(item_types),
+                ContentItem.owner_user_id == user.id,
             )
         )
         or 0
@@ -88,32 +122,33 @@ def count_content(db: Session, user: User, *, kind: str) -> int:
 
 
 def _content_item(
-    normalized: NormalizedItem,
+    item: ContentItem,
     raw: RawItem,
     source: Source,
+    author: SocialAccount | None,
+    metric: ContentMetricSnapshot | None,
+    topic: ContentTopicMatch | None,
 ) -> ContentItemRead:
-    metadata = raw.raw_metadata or {}
-    relevance = metadata.get("relevance") or {}
-    matched_terms = relevance.get("matched_terms") or []
+    metadata = raw.raw_payload or {}
     return ContentItemRead(
-        id=normalized.id,
-        source_id=normalized.source_id,
+        id=item.id,
+        source_id=item.source_id,
         source_name=source.source_name,
-        platform=normalized.platform,
-        item_type=normalized.item_type,
-        external_id=raw.external_id,
+        platform=item.platform,
+        item_type=item.item_type,
+        external_id=item.external_id,
         parent_external_id=raw.parent_external_id,
-        author=metadata.get("author_display_name"),
-        content=normalized.content_text,
-        permalink=normalized.permalink,
-        published_at=normalized.published_at,
-        collected_at=normalized.collected_at,
+        author=author.display_name if author else None,
+        content=item.content_text,
+        permalink=item.permalink,
+        published_at=item.published_at,
+        collected_at=item.collected_at,
         published_label=metadata.get("published_label"),
-        group_name=metadata.get("group"),
-        reaction_count=int(metadata.get("reaction_count") or 0),
-        reported_comment_count=int(metadata.get("reported_comment_count") or 0),
-        collected_comment_count=int(metadata.get("collected_comment_count") or 0),
-        topic=relevance.get("topic"),
-        matched_terms=[str(term) for term in matched_terms],
-        is_reply=normalized.item_type == "reply",
+        group_name=metadata.get("group") or source.source_name,
+        reaction_count=metric.reaction_count if metric else 0,
+        reported_comment_count=metric.comment_count if metric else 0,
+        collected_comment_count=metric.collected_comment_count if metric else 0,
+        topic=topic.topic_key if topic else None,
+        matched_terms=[str(term) for term in (topic.matched_terms if topic else [])],
+        is_reply=item.item_type == "reply",
     )

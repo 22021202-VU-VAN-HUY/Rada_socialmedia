@@ -54,6 +54,10 @@ def create_run_configuration(
         connection_id=connection.id,
         source_id=source.id,
         max_posts=payload.max_posts,
+        max_comments_per_post=payload.max_comments_per_post,
+        lookback_hours=payload.lookback_hours,
+        include_replies=payload.include_replies,
+        filters=payload.filters,
     )
     db.add(configuration)
     db.commit()
@@ -68,7 +72,7 @@ def update_run_configuration(
     payload: RunConfigurationUpdate,
 ) -> RunConfiguration:
     configuration = _owned_run_configuration(db, user.id, configuration_id)
-    if configuration.last_status == "deleted":
+    if configuration.is_archived:
         raise CollectionServiceError("Cau hinh thu thap da bi xoa.")
     updates = payload.model_dump(exclude_none=True)
     for field, value in updates.items():
@@ -84,8 +88,7 @@ def delete_run_configuration(
     configuration_id: str,
 ) -> None:
     configuration = _owned_run_configuration(db, user.id, configuration_id)
-    configuration.enabled = False
-    configuration.next_run_at = None
+    configuration.is_archived = True
     configuration.last_status = "deleted"
     configuration.last_error = None
     db.commit()
@@ -97,7 +100,7 @@ def enqueue_job(
     configuration_id: str,
 ) -> CollectionJob:
     configuration = _owned_run_configuration(db, user.id, configuration_id)
-    if configuration.last_status == "deleted":
+    if configuration.is_archived:
         raise CollectionServiceError("Cau hinh thu thap da bi xoa.")
     connection = _owned_connection(db, user.id, configuration.connection_id)
     if connection.status != "connected":
@@ -116,6 +119,7 @@ def enqueue_job(
         run_configuration_id=configuration.id,
         connection_id=connection.id,
         source_id=configuration.source_id,
+        platform=connection.platform,
         status="queued",
         trigger="manual",
     )
@@ -163,7 +167,7 @@ def enqueue_default_facebook_group_job(
             RunConfiguration.user_id == user.id,
             RunConfiguration.connection_id == connection.id,
             RunConfiguration.source_id == source.id,
-            RunConfiguration.last_status != "deleted",
+            RunConfiguration.is_archived.is_(False),
         )
         .order_by(RunConfiguration.created_at.desc())
     )
@@ -235,15 +239,20 @@ def run_job(db: Session, settings: Settings, job: CollectionJob) -> None:
         def persist_progress(progress: dict) -> None:
             _write_export(output_path, progress)
             records = records_from_coccoc_export(progress)
-            run_import_batch(
+            import_result = run_import_batch(
                 db,
                 ImportBatchRequest(import_batch_id=job.id, records=records),
             )
             job.posts_collected = len(progress.get("posts", []))
-            job.comments_collected = sum(
-                len(item.get("comments", []))
+            comments = [
+                comment
                 for item in progress.get("posts", [])
-            )
+                for comment in item.get("comments", [])
+            ]
+            job.comments_collected = sum(not comment.get("is_reply") for comment in comments)
+            job.replies_collected = sum(bool(comment.get("is_reply")) for comment in comments)
+            job.records_inserted += import_result.inserted
+            job.duplicates_skipped += import_result.skipped_duplicates
             db.commit()
 
         payload = FacebookCollector(settings).collect(
@@ -255,7 +264,7 @@ def run_job(db: Session, settings: Settings, job: CollectionJob) -> None:
         )
         _write_export(output_path, payload)
         records = load_import_file(output_path)
-        run_import_batch(
+        import_result = run_import_batch(
             db,
             ImportBatchRequest(import_batch_id=job.id, records=records),
         )
@@ -263,9 +272,15 @@ def run_job(db: Session, settings: Settings, job: CollectionJob) -> None:
         job.status = "completed"
         job.completed_at = datetime.now(UTC)
         job.posts_collected = len(payload.get("posts", []))
-        job.comments_collected = sum(
-            len(item.get("comments", [])) for item in payload.get("posts", [])
-        )
+        comments = [
+            comment
+            for item in payload.get("posts", [])
+            for comment in item.get("comments", [])
+        ]
+        job.comments_collected = sum(not comment.get("is_reply") for comment in comments)
+        job.replies_collected = sum(bool(comment.get("is_reply")) for comment in comments)
+        job.records_inserted += import_result.inserted
+        job.duplicates_skipped += import_result.skipped_duplicates
         job.output_path = str(output_path)
         connection.last_checked_at = datetime.now(UTC)
         connection.last_error = None

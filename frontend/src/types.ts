@@ -47,12 +47,16 @@ export type Job = {
   id: string;
   run_configuration_id: string;
   source_id: string;
+  platform: string;
   status: "queued" | "running" | "completed" | "failed";
   trigger: "manual" | "scheduled";
   started_at: string | null;
   completed_at: string | null;
   posts_collected: number;
   comments_collected: number;
+  replies_collected: number;
+  records_inserted: number;
+  duplicates_skipped: number;
   output_path: string | null;
   error_summary: string | null;
   created_at: string | null;
@@ -69,8 +73,10 @@ export type Overview = {
 export type Source = {
   id: string;
   platform: string;
+  external_id: string | null;
   source_kind: string;
   source_name: string;
+  handle: string | null;
   source_url: string | null;
   enabled: boolean;
   lookback_hours: number;
@@ -101,6 +107,10 @@ export type RunConfiguration = {
   connection_id: string;
   source_id: string;
   max_posts: number;
+  max_comments_per_post: number;
+  lookback_hours: number;
+  include_replies: boolean;
+  filters: Record<string, unknown>;
   last_run_at: string | null;
   last_status: string;
   last_error: string | null;

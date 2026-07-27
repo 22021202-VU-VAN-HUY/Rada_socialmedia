@@ -12,7 +12,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from talent_radar.core.config import get_settings
-from talent_radar.core.database import create_all, get_db
+from talent_radar.core.database import get_db, upgrade_database
 from talent_radar.models import (
     AuthSession,
     CollectionJob,
@@ -81,7 +81,7 @@ worker = BackgroundWorker(settings)
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    create_all()
+    upgrade_database()
     if settings.background_worker_enabled:
         worker.start()
     yield
@@ -181,9 +181,13 @@ def sync_sources(db: Session = Depends(get_db)) -> list[Source]:
 
 
 @app.post("/imports", response_model=ImportBatchResult)
-def import_batch(payload: ImportBatchRequest, db: Session = Depends(get_db)) -> ImportBatchResult:
+def import_batch(
+    payload: ImportBatchRequest,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> ImportBatchResult:
     try:
-        return run_import_batch(db, payload)
+        return run_import_batch(db, payload, owner_user_id=user.id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -317,8 +321,8 @@ def disconnect_platform(
         )
     ).all()
     for configuration in configurations:
-        configuration.enabled = False
-        configuration.next_run_at = None
+        configuration.is_archived = True
+        configuration.last_status = "deleted"
     db.commit()
     db.refresh(connection)
     return ConnectionActionResult(
@@ -337,7 +341,7 @@ def list_run_configurations(
             select(RunConfiguration)
             .where(
                 RunConfiguration.user_id == user.id,
-                RunConfiguration.last_status != "deleted",
+                RunConfiguration.is_archived.is_(False),
             )
             .order_by(RunConfiguration.created_at.desc())
         ).all()
@@ -517,7 +521,7 @@ def overview(
         .select_from(RunConfiguration)
         .where(
             RunConfiguration.user_id == user.id,
-            RunConfiguration.last_status != "deleted",
+            RunConfiguration.is_archived.is_(False),
         )
     )
     connected_platforms = db.scalar(
