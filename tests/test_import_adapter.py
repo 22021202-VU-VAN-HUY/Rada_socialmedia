@@ -45,6 +45,11 @@ def test_load_import_file_accepts_coccoc_export(tmp_path: Path) -> None:
                             "url": "https://www.facebook.com/groups/example/posts/post_1/",
                             "published_at": "2026-07-23T09:30:00+07:00",
                             "published_label": "30 phút",
+                            "relevance": {
+                                "topic": "vsf",
+                                "matched_terms": ["VSF"],
+                                "matched_groups": ["identity"],
+                            },
                         },
                         "comments": [
                             {
@@ -74,6 +79,7 @@ def test_load_import_file_accepts_coccoc_export(tmp_path: Path) -> None:
     assert [record.item_type for record in records] == ["post", "comment", "comment"]
     assert records[0].published_at.isoformat() == "2026-07-23T09:30:00+07:00"
     assert records[0].raw_metadata["published_label"] == "30 phút"
+    assert records[0].raw_metadata["relevance"]["matched_terms"] == ["VSF"]
     assert records[1].parent_external_id == "post_1"
     assert records[1].raw_metadata["author_display_name"] == "Member"
     assert records[2].content_text == "[non-text comment]"

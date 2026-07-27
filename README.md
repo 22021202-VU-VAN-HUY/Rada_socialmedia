@@ -33,13 +33,12 @@ python -m pip install -e ".[dev]"
 Copy-Item .env.example .env
 ```
 
-The default local database is `data/talent_radar.sqlite3`. Coc Coc is expected at:
-
-```text
-C:\Program Files\CocCoc\Browser\Application\browser.exe
-```
-
-Override `COCCOC_EXECUTABLE_PATH` in `.env` when needed.
+The default local database is `data/talent_radar.sqlite3`. Set Coc Coc as the
+Windows default browser. Talent Radar opens every app, login, and OAuth URL through
+the Windows browser association, so Coc Coc reuses its installed default profile.
+`COCCOC_USER_DATA_DIRECTORY` and `COCCOC_PROFILE_DIRECTORY` are read only to verify
+that the configured profile exists; Talent Radar does not create another browser
+user-data directory.
 
 Facebook OAuth also requires a Meta app:
 
@@ -62,9 +61,9 @@ From File Explorer, double-click:
 Open Talent Radar.cmd
 ```
 
-This starts the API and worker as hidden processes, then opens
-`http://localhost:8501` in Coc Coc `Default` for Vũ Văn Huy. VSCode's browser is
-not used.
+This starts the API and worker as hidden processes, then asks Windows to open
+`http://localhost:8501` in the default browser. When Coc Coc is the Windows default,
+it reuses Coc Coc's current default profile. VSCode's browser is not used.
 
 The PowerShell equivalent is:
 
@@ -86,16 +85,17 @@ Runtime logs and PID files are stored under `data/runtime`.
 ## Connect Facebook
 
 1. Open Settings and select **Lien ket** for Facebook.
-2. Coc Coc opens Facebook's official OAuth permission screen under
-   `Vũ Văn Huy (Default)`.
+2. Windows opens Facebook's official OAuth permission screen in the current default
+   Coc Coc profile.
 3. Review the requested permission and continue.
 4. Facebook redirects to the local API callback. Talent Radar exchanges the code
    server-side, verifies `/me`, and only then marks the connection as connected.
 
 The OAuth access token is protected with Windows DPAPI before it is stored locally.
-The collector still reuses Huy's existing profile and does not export cookies,
-passwords, or saved credentials. OAuth proves account authorization; it does not
-automatically grant access to arbitrary Facebook group posts or comments.
+The collector only attaches to an already controlled instance of that profile and
+never launches a copied browser user. It does not export cookies, passwords, or saved
+credentials. OAuth proves account authorization; it does not automatically grant
+access to arbitrary Facebook group posts or comments.
 
 ## Run At Windows Logon
 
@@ -117,6 +117,16 @@ Invoke-RestMethod -Method Post http://localhost:8000/sources/sync
 ```
 
 The included registry contains the public Facebook group from `textlinkmau.txt`.
+
+## VSF Topic Filter
+
+Facebook collection keeps only posts whose text matches the VSF taxonomy in
+`config/vsf_keywords.yaml`. Matching ignores case, Vietnamese accents, punctuation,
+and repeated whitespace. Comments and replies are expanded only after a post matches.
+Each retained post records the matched terms in its `relevance` metadata.
+
+Extend `keyword_groups` in the YAML file to add aliases without changing collector
+code. Avoid broad single words such as `vin`, which can create unrelated matches.
 
 ## API
 

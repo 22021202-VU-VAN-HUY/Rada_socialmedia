@@ -3,11 +3,14 @@ from contextlib import nullcontext
 from pathlib import Path
 from unittest.mock import Mock
 
+import pytest
 from sqlalchemy.orm import Session
 
 from talent_radar.core.config import Settings
 from talent_radar.models import PlatformConnection
 from talent_radar.services.browser_profiles import (
+    BrowserProfileError,
+    ensure_controlled_coccoc,
     launch_coccoc_url,
     launch_login_browser,
     selected_coccoc_profile,
@@ -16,8 +19,6 @@ from talent_radar.services.browser_profiles import (
 
 
 def fake_coccoc_settings(tmp_path: Path) -> Settings:
-    executable = tmp_path / "browser.exe"
-    executable.touch()
     user_data = tmp_path / "User Data"
     profile = user_data / "Default"
     profile.mkdir(parents=True)
@@ -32,9 +33,7 @@ def fake_coccoc_settings(tmp_path: Path) -> Settings:
     )
     return Settings(
         _env_file=None,
-        coccoc_executable_path=executable,
         coccoc_user_data_directory=user_data,
-        coccoc_control_user_data_directory=user_data,
         coccoc_profile_directory="Default",
         coccoc_profile_account_name="Vu Van Huy",
     )
@@ -48,7 +47,40 @@ def test_selected_profile_resolves_huy_account(tmp_path: Path) -> None:
     assert profile.account_name == "Vu Van Huy"
 
 
-def test_login_browser_uses_existing_huy_profile(
+def test_selected_profile_accepts_missing_optional_account_metadata(
+    tmp_path: Path,
+) -> None:
+    settings = fake_coccoc_settings(tmp_path)
+    preferences = settings.coccoc_user_data_directory / "Default" / "Preferences"
+    preferences.write_text(
+        json.dumps({"profile": {"name": "Ca nhan 1"}}),
+        encoding="utf-8",
+    )
+
+    profile = selected_coccoc_profile(settings)
+
+    assert profile.directory == "Default"
+    assert profile.account_name is None
+
+
+def test_selected_profile_rejects_known_different_account(tmp_path: Path) -> None:
+    settings = fake_coccoc_settings(tmp_path)
+    preferences = settings.coccoc_user_data_directory / "Default" / "Preferences"
+    preferences.write_text(
+        json.dumps(
+            {
+                "profile": {"name": "Other profile"},
+                "account_info": [{"full_name": "Someone Else"}],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(BrowserProfileError):
+        selected_coccoc_profile(settings)
+
+
+def test_login_browser_uses_windows_default_browser(
     db: Session,
     tmp_path: Path,
     monkeypatch,
@@ -65,20 +97,21 @@ def test_login_browser_uses_existing_huy_profile(
     )
     db.add(connection)
     db.commit()
-    process = Mock(pid=4321)
-    popen = Mock(return_value=process)
-    monkeypatch.setattr("talent_radar.services.browser_profiles.subprocess.Popen", popen)
+    opened = Mock()
+    monkeypatch.setattr(
+        "talent_radar.services.browser_profiles._open_url_in_default_browser",
+        opened,
+    )
 
     updated = launch_login_browser(db, settings, connection)
 
-    arguments = popen.call_args.args[0]
-    assert "--profile-directory=Default" in arguments
-    assert "https://www.facebook.com/me" in arguments
+    opened.assert_called_once_with("https://www.facebook.com/me")
     assert updated.status == "pending_login"
-    assert updated.connection_metadata["login_check"] == "coccoc_address_bar"
+    assert updated.browser_process_id is None
+    assert updated.connection_metadata["login_check"] == "default_browser_profile"
 
 
-def test_login_browser_does_not_require_managed_coccoc(
+def test_login_browser_records_existing_default_profile(
     db: Session,
     tmp_path: Path,
     monkeypatch,
@@ -95,41 +128,53 @@ def test_login_browser_does_not_require_managed_coccoc(
     )
     db.add(connection)
     db.commit()
-    popen = Mock(return_value=Mock(pid=1234))
-    monkeypatch.setattr("talent_radar.services.browser_profiles.subprocess.Popen", popen)
+    opened = Mock()
+    monkeypatch.setattr(
+        "talent_radar.services.browser_profiles._open_url_in_default_browser",
+        opened,
+    )
 
     updated = launch_login_browser(db, settings, connection)
 
-    popen.assert_called_once()
+    opened.assert_called_once()
     assert updated.status == "pending_login"
+    assert updated.connection_metadata["profile_directory"] == "Default"
+    assert updated.connection_metadata["profile_account_name"] == "Vu Van Huy"
 
 
-def test_oauth_url_reuses_controlled_huy_coccoc(
+def test_oauth_url_uses_windows_default_browser(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
     settings = fake_coccoc_settings(tmp_path)
     settings.coccoc_remote_debugging_port = 9223
     opened = Mock()
-    popen = Mock()
     monkeypatch.setattr(
-        "talent_radar.services.browser_profiles._debug_port_available",
-        lambda port: port == 9223,
-    )
-    monkeypatch.setattr(
-        "talent_radar.services.browser_profiles._open_url_in_controlled_browser",
+        "talent_radar.services.browser_profiles._open_url_in_default_browser",
         opened,
-    )
-    monkeypatch.setattr(
-        "talent_radar.services.browser_profiles.subprocess.Popen",
-        popen,
     )
 
     process_id = launch_coccoc_url(settings, "https://facebook.example/oauth")
 
     assert process_id is None
-    opened.assert_called_once_with(9223, "https://facebook.example/oauth")
-    popen.assert_not_called()
+    opened.assert_called_once_with("https://facebook.example/oauth")
+
+
+def test_collector_never_launches_a_separate_browser_profile(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    settings = fake_coccoc_settings(tmp_path)
+    monkeypatch.setattr(
+        "talent_radar.services.browser_profiles._debug_port_available",
+        lambda _port: False,
+    )
+
+    with pytest.raises(BrowserProfileError, match="khong tu mo profile"):
+        ensure_controlled_coccoc(
+            settings,
+            "https://www.facebook.com/groups/example/",
+        )
 
 
 class FakeLocator:

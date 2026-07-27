@@ -88,9 +88,15 @@ def api_request(method: str, path: str, *, auth: bool = True, **kwargs: Any) -> 
     return response.json()
 
 
-def load_export(path: Path) -> dict[str, Any]:
-    with path.open("r", encoding="utf-8-sig") as handle:
+@st.cache_data(show_spinner=False)
+def _load_export_cached(path_text: str, modified_ns: int) -> dict[str, Any]:
+    del modified_ns
+    with Path(path_text).open("r", encoding="utf-8-sig") as handle:
         return json.load(handle)
+
+
+def load_export(path: Path) -> dict[str, Any]:
+    return _load_export_cached(str(path.resolve()), path.stat().st_mtime_ns)
 
 
 def export_files() -> list[Path]:
@@ -112,6 +118,10 @@ def post_rows(
                 "post_id": post.get("external_id"),
                 "author": post.get("author"),
                 "group": post.get("group"),
+                "topic": (post.get("relevance") or {}).get("topic"),
+                "matched_keywords": ", ".join(
+                    (post.get("relevance") or {}).get("matched_terms") or []
+                ),
                 "published": relative_published(
                     post,
                     published_reference or datetime.now(UTC),
@@ -251,7 +261,7 @@ def render_data(view: str) -> None:
                     " ",
                     key="sync_post_rows",
                     icon=":material/sync:",
-                    help="Cap nhat thoi gian dang",
+                    help="Cap nhat du lieu va thoi gian dang",
                     width="stretch",
                 ):
                     st.session_state.post_published_reference = datetime.now(UTC)
@@ -260,15 +270,7 @@ def render_data(view: str) -> None:
                 render_post_collection_action()
     else:
         st.title("Binh luan")
-    if view == "Posts":
-        render_live_post_rows()
-    else:
-        render_export_rows(view)
-
-
-@st.fragment(run_every=2)
-def render_live_post_rows() -> None:
-    render_export_rows("Posts")
+    render_export_rows(view)
 
 
 def render_export_rows(view: str) -> None:
@@ -316,7 +318,7 @@ def render_post_collection_action() -> None:
     latest = jobs[0] if jobs else None
     active = latest is not None and latest["status"] in {"queued", "running"}
     if st.button(
-        "Thuc hien lay du lieu",
+        "Lay bai viet lien quan VSF",
         key="collect_facebook_posts",
         type="primary",
         icon=":material/download:",
@@ -324,7 +326,7 @@ def render_post_collection_action() -> None:
         width="stretch",
     ):
         try:
-            job = api_request("POST", "/collection/facebook/run-now")
+            api_request("POST", "/collection/facebook/run-now")
             st.toast("Da dua tac vu lay du lieu vao nen.")
             st.rerun()
         except ApiError as exc:
@@ -416,12 +418,9 @@ def run_connection_action(platform: str, action: str) -> None:
         st.error(str(exc))
 
 
-def render_platform_connections() -> None:
-    try:
-        connections = api_request("GET", "/connections")
-    except ApiError as exc:
-        st.error(str(exc))
-        return
+def render_platform_connections(
+    connections: list[dict[str, Any]],
+) -> None:
     for connection in connections:
         platform_actions(connection)
 
@@ -552,7 +551,7 @@ def render_settings() -> None:
         st.error(str(exc))
         return
     st.subheader("Nen tang")
-    render_platform_connections()
+    render_platform_connections(connections)
     st.divider()
     schedule_column, list_column = st.columns([2, 3])
     with schedule_column:
@@ -567,12 +566,15 @@ def main() -> None:
     if not st.session_state.get("access_token"):
         render_auth()
         return
-    try:
-        user = api_request("GET", "/auth/me")
-    except ApiError as exc:
-        st.warning(str(exc))
-        render_auth()
-        return
+    user = st.session_state.get("user")
+    if user is None:
+        try:
+            user = api_request("GET", "/auth/me")
+            st.session_state.user = user
+        except ApiError as exc:
+            st.warning(str(exc))
+            render_auth()
+            return
 
     st.sidebar.title("Talent Radar")
     st.sidebar.caption(user["email"])

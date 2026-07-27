@@ -14,6 +14,7 @@ from talent_radar.services.browser_profiles import (
     BrowserProfileError,
     ensure_controlled_coccoc,
 )
+from talent_radar.services.topic_filter import TopicKeywordFilter
 
 
 class CollectionError(RuntimeError):
@@ -27,6 +28,9 @@ class LoginRequiredError(CollectionError):
 class FacebookCollector:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
+        self.topic_filter = TopicKeywordFilter.from_yaml(
+            settings.facebook_topic_filter_path
+        )
 
     def collect(
         self,
@@ -44,7 +48,6 @@ class FacebookCollector:
             debug_port, _ = ensure_controlled_coccoc(
                 self.settings,
                 source.source_url,
-                minimized=True,
             )
         except BrowserProfileError as exc:
             raise CollectionError(str(exc)) from exc
@@ -70,6 +73,8 @@ class FacebookCollector:
                 posts = []
                 failures = []
                 consecutive_old_posts = 0
+                posts_scanned = 0
+                posts_filtered_out = 0
 
                 def payload() -> dict:
                     return {
@@ -85,13 +90,20 @@ class FacebookCollector:
                         if "/posts/" in source.source_url
                         or "/permalink/" in source.source_url
                         else None,
+                        "content_filter": {
+                            **self.topic_filter.describe(),
+                            "posts_scanned": posts_scanned,
+                            "posts_matched": len(posts),
+                            "posts_filtered_out": posts_filtered_out,
+                        },
                         "posts": posts,
                         "failures": failures,
                     }
 
                 for url in urls:
                     try:
-                        item = self._collect_post(page, url)
+                        item = self._collect_post_preview(page, url)
+                        posts_scanned += 1
                         published_at = _published_at(
                             item["post"],
                             now=datetime.now(
@@ -117,6 +129,19 @@ class FacebookCollector:
                                 break
                             continue
                         consecutive_old_posts = 0
+                        if not _annotate_topic_relevance(
+                            item["post"],
+                            self.topic_filter,
+                        ):
+                            posts_filtered_out += 1
+                            if on_progress is not None:
+                                on_progress(payload())
+                            continue
+                        relevance = item["post"]["relevance"]
+                        item = self._collect_loaded_post_comments(page)
+                        item["post"]["relevance"] = relevance
+                        if published_at is not None:
+                            item["post"]["published_at"] = published_at.isoformat()
                         posts.append(item)
                         if on_progress is not None:
                             on_progress(payload())
@@ -164,12 +189,19 @@ class FacebookCollector:
             raise CollectionError("Khong tim thay bai viet trong group.")
         return unique[:max_posts]
 
-    def _collect_post(self, page: Page, url: str) -> dict:
+    def _collect_post_preview(self, page: Page, url: str) -> dict:
         page.goto(url, wait_until="domcontentloaded")
         self._assert_authenticated(page)
         page.wait_for_timeout(2500)
+        return self._extract_loaded_post(page)
+
+    def _collect_loaded_post_comments(self, page: Page) -> dict:
         self._select_all_comments(page)
         self._expand_replies(page)
+        return self._extract_loaded_post(page)
+
+    @staticmethod
+    def _extract_loaded_post(page: Page) -> dict:
         payload = page.evaluate(_EXTRACT_POST_SCRIPT)
         if not payload:
             raise CollectionError("Khong tim thay noi dung bai viet hoac hop thoai bai viet.")
@@ -229,6 +261,17 @@ class FacebookCollector:
 def _canonical_url(url: str) -> str:
     parts = urlsplit(url.strip())
     return urlunsplit((parts.scheme or "https", parts.netloc, parts.path.rstrip("/") + "/", "", ""))
+
+
+def _annotate_topic_relevance(
+    post: dict,
+    topic_filter: TopicKeywordFilter,
+) -> bool:
+    match = topic_filter.match(post.get("content"))
+    if not match.matched:
+        return False
+    post["relevance"] = match.as_dict()
+    return True
 
 
 def _chronological_group_url(url: str) -> str:

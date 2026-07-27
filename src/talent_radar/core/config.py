@@ -15,14 +15,11 @@ class Settings(BaseSettings):
     crawl_max_comments_per_post: int = 100
     collection_timezone: str = "Asia/Ho_Chi_Minh"
     crawl_output_directory: Path = Path("data/exports")
+    facebook_topic_filter_path: Path = Path("config/vsf_keywords.yaml")
     coccoc_window_handle: int | None = None
-    coccoc_executable_path: Path = Path(
-        r"C:\Program Files\CocCoc\Browser\Application\browser.exe"
-    )
     coccoc_user_data_directory: Path = (
         Path.home() / "AppData/Local/CocCoc/Browser/User Data"
     )
-    coccoc_control_user_data_directory: Path = Path("data/coccoc_huy_user_data")
     coccoc_profile_directory: str = "Default"
     coccoc_profile_account_name: str = "Vũ Văn Huy"
     coccoc_remote_debugging_port: int = 9223

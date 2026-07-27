@@ -187,8 +187,11 @@ def list_connections(
     user: User = Depends(current_user),
     db: Session = Depends(get_db),
 ) -> list[PlatformConnectionRead]:
-    for platform in PLATFORM_LOGIN_URLS:
-        connection_for_platform(db, settings, user, platform)
+    try:
+        for platform in PLATFORM_LOGIN_URLS:
+            connection_for_platform(db, settings, user, platform)
+    except BrowserProfileError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     connections = db.scalars(
         select(PlatformConnection)
         .where(PlatformConnection.user_id == user.id)
@@ -211,12 +214,12 @@ def connect_platform(
             db.commit()
             db.refresh(connection)
             message = (
-                "Da mo cua so cap quyen Facebook trong Coc Coc Huy. "
+                "Da mo cua so cap quyen Facebook trong trinh duyet mac dinh. "
                 "Ket noi chi hoan tat sau khi Facebook chuyen ve Talent Radar."
             )
         else:
             connection = launch_login_browser(db, settings, connection)
-            message = "Da mo trang dang nhap trong Coc Coc Huy."
+            message = "Da mo trang dang nhap trong trinh duyet mac dinh."
         return ConnectionActionResult(
             connection=connection_read(connection),
             message=message,

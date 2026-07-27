@@ -53,12 +53,9 @@ Start-TalentRadarProcess -Name "dashboard" -Arguments @(
 )
 
 $dashboardUrl = "http://localhost:$DashboardPort"
-$coccocExecutable = "C:\Program Files\CocCoc\Browser\Application\browser.exe"
 
 Start-Sleep -Seconds 2
 
-Start-Process `
-    -FilePath $coccocExecutable `
-    -ArgumentList @("--profile-directory=Default", $dashboardUrl)
+Start-Process $dashboardUrl
 
 Write-Output "Talent Radar: $dashboardUrl"

@@ -57,6 +57,7 @@ def _records_from_coccoc_export(data: dict) -> list[ImportRecord]:
                         "reaction_count": post.get("reaction_count", 0),
                         "reported_comment_count": post.get("reported_comment_count", 0),
                         "collected_comment_count": post.get("collected_comment_count", 0),
+                        "relevance": post.get("relevance"),
                     },
                 )
             )

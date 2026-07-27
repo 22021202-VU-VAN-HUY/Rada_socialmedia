@@ -2,11 +2,10 @@ from __future__ import annotations
 
 import json
 import os
-import subprocess
-import time
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.error import URLError
+from urllib.parse import urlsplit
 from urllib.request import urlopen
 from uuid import uuid4
 
@@ -98,25 +97,9 @@ def connection_for_platform(
 
 
 def launch_coccoc_url(settings: Settings, url: str) -> int | None:
-    if _debug_port_available(settings.coccoc_remote_debugging_port):
-        _open_url_in_controlled_browser(
-            settings.coccoc_remote_debugging_port,
-            url,
-        )
-        return None
-    executable = settings.coccoc_executable_path.resolve()
-    if not executable.is_file():
-        raise BrowserProfileError(f"Khong tim thay Coc Coc tai {executable}")
-    profile = selected_coccoc_profile(settings)
-    process = subprocess.Popen(
-        [
-            str(executable),
-            f"--profile-directory={profile.directory}",
-            url,
-        ],
-        start_new_session=True,
-    )
-    return process.pid
+    selected_coccoc_profile(settings)
+    _open_url_in_default_browser(url)
+    return None
 
 
 def launch_login_browser(
@@ -124,32 +107,22 @@ def launch_login_browser(
     settings: Settings,
     connection: PlatformConnection,
 ) -> PlatformConnection:
-    executable = settings.coccoc_executable_path.resolve()
-    if not executable.is_file():
-        raise BrowserProfileError(f"Khong tim thay Coc Coc tai {executable}")
     profile = selected_coccoc_profile(settings)
     target_url = (
         "https://www.facebook.com/me"
         if connection.platform == "facebook"
         else connection.login_url
     )
-    process = subprocess.Popen(
-        [
-            str(executable),
-            f"--profile-directory={profile.directory}",
-            target_url,
-        ],
-        start_new_session=True,
-    )
+    _open_url_in_default_browser(target_url)
 
     connection.status = "pending_login"
-    connection.browser_process_id = process.pid
+    connection.browser_process_id = None
     connection.last_error = None
     connection.connection_metadata = {
         **(connection.connection_metadata or {}),
         **_profile_metadata(profile),
         "login_verified": False,
-        "login_check": "coccoc_address_bar",
+        "login_check": "default_browser_profile",
     }
     db.commit()
     db.refresh(connection)
@@ -159,48 +132,17 @@ def launch_login_browser(
 def ensure_controlled_coccoc(
     settings: Settings,
     initial_url: str,
-    *,
-    minimized: bool = False,
 ) -> tuple[int, int | None]:
-    executable = settings.coccoc_executable_path.resolve()
-    if not executable.is_file():
-        raise BrowserProfileError(f"Khong tim thay Coc Coc tai {executable}")
-    profile = selected_coccoc_profile(settings)
-    control_user_data_dir = Path(
-        os.path.abspath(settings.coccoc_control_user_data_directory)
-    )
-    if not (control_user_data_dir / profile.directory / "Preferences").is_file():
-        raise BrowserProfileError(
-            "Khong tim thay profile Coc Coc Huy cho collector."
-        )
+    selected_coccoc_profile(settings)
     debug_port = settings.coccoc_remote_debugging_port
 
     if _debug_port_available(debug_port):
         _open_url_in_controlled_browser(debug_port, initial_url)
         return debug_port, None
-    if coccoc_is_running():
-        raise BrowserProfileError(
-            "Coc Coc Huy dang mo nhung chua co kenh collector noi bo."
-        )
-
-    arguments = [
-        str(executable),
-        f"--user-data-dir={control_user_data_dir}",
-        f"--profile-directory={profile.directory}",
-        f"--remote-debugging-port={debug_port}",
-        "--remote-debugging-address=127.0.0.1",
-        "--no-first-run",
-        "--no-default-browser-check",
-    ]
-    if minimized:
-        arguments.append("--start-minimized")
-    arguments.append(initial_url)
-    process = subprocess.Popen(arguments, start_new_session=True)
-    if not _wait_for_debug_port(debug_port):
-        raise BrowserProfileError(
-            "Coc Coc da mo nhung khong bat duoc kenh local cua Talent Radar."
-        )
-    return debug_port, process.pid
+    raise BrowserProfileError(
+        "Coc Coc mac dinh chua co kenh collector noi bo. "
+        "Talent Radar se khong tu mo profile hoac user moi."
+    )
 
 
 def verify_platform_login(
@@ -302,7 +244,8 @@ def selected_coccoc_profile(settings: Settings) -> CocCocProfile:
     expected_account_name = settings.coccoc_profile_account_name.strip()
     if (
         expected_account_name
-        and (account_name or "").casefold() != expected_account_name.casefold()
+        and account_name
+        and account_name.casefold() != expected_account_name.casefold()
     ):
         raise BrowserProfileError(
             f"Profile {directory} khong thuoc tai khoan {expected_account_name}."
@@ -315,18 +258,21 @@ def selected_coccoc_profile(settings: Settings) -> CocCocProfile:
     )
 
 
-def coccoc_is_running() -> bool:
-    try:
-        result = subprocess.run(
-            ["tasklist", "/FI", "IMAGENAME eq browser.exe", "/NH", "/FO", "CSV"],
-            check=False,
-            capture_output=True,
-            text=True,
-            timeout=5,
+def _open_url_in_default_browser(url: str) -> None:
+    parts = urlsplit(url)
+    if parts.scheme not in {"http", "https"} or not parts.netloc:
+        raise BrowserProfileError("URL mo trong trinh duyet khong hop le.")
+    startfile = getattr(os, "startfile", None)
+    if startfile is None:
+        raise BrowserProfileError(
+            "Chi ho tro mo trinh duyet mac dinh tren Windows."
         )
-    except (OSError, subprocess.SubprocessError):
-        return False
-    return '"browser.exe"' in result.stdout.casefold()
+    try:
+        startfile(url)
+    except OSError as exc:
+        raise BrowserProfileError(
+            "Khong mo duoc URL trong trinh duyet mac dinh cua Windows."
+        ) from exc
 
 
 def _open_url_in_controlled_browser(port: int, url: str) -> None:
@@ -355,15 +301,6 @@ def _profile_metadata(profile: CocCocProfile) -> dict:
         "profile_name": profile.profile_name,
         "profile_account_name": profile.account_name,
     }
-
-
-def _wait_for_debug_port(port: int, timeout_seconds: float = 12) -> bool:
-    deadline = time.monotonic() + timeout_seconds
-    while time.monotonic() < deadline:
-        if _debug_port_available(port):
-            return True
-        time.sleep(0.25)
-    return False
 
 
 def _debug_port_available(port: int) -> bool:
