@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     auth_session_hours: int = 168
     background_worker_enabled: bool = True
     background_poll_seconds: int = 15
+    automatic_schedules_enabled: bool = False
 
     facebook_app_id: str = ""
     facebook_app_secret: str = ""

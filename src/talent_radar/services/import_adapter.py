@@ -21,7 +21,7 @@ def load_import_file(path: Path) -> list[ImportRecord]:
         with path.open("r", encoding="utf-8-sig") as handle:
             data = json.load(handle)
         if isinstance(data, dict) and data.get("crawler") in {"coccoc-ui", "coccoc-playwright"}:
-            return _records_from_coccoc_export(data)
+            return records_from_coccoc_export(data)
         rows = data.get("records", data) if isinstance(data, dict) else data
         if not isinstance(rows, list):
             raise ValueError("JSON import must be a list or an object with a records list")
@@ -29,7 +29,7 @@ def load_import_file(path: Path) -> list[ImportRecord]:
     raise ValueError("Import file must be .csv or .json")
 
 
-def _records_from_coccoc_export(data: dict) -> list[ImportRecord]:
+def records_from_coccoc_export(data: dict) -> list[ImportRecord]:
     source_id = data.get("source_id")
     if not source_id:
         raise ValueError("Coc Coc export must include source_id")
@@ -104,6 +104,9 @@ def run_import_batch(db: Session, payload: ImportBatchRequest) -> ImportBatchRes
             select(RawItem).where(RawItem.source_id == record.source_id, RawItem.content_hash == content_hash)
         )
         if duplicate is not None:
+            duplicate.raw_metadata = record.raw_metadata
+            duplicate.permalink = record.permalink or duplicate.permalink
+            duplicate.collected_at = record.collected_at or duplicate.collected_at
             if record.published_at is not None and duplicate.published_at is None:
                 duplicate.published_at = record.published_at
                 normalized = db.scalar(

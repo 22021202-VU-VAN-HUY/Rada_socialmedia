@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+from datetime import datetime
+from pathlib import Path
 
-from fastapi import Depends, FastAPI, HTTPException, Response
+from fastapi import Depends, FastAPI, HTTPException, Query, Response
 from fastapi.responses import HTMLResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from sqlalchemy import select
+from fastapi.staticfiles import StaticFiles
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from talent_radar.core.config import get_settings
@@ -21,9 +24,11 @@ from talent_radar.models import (
 from talent_radar.schemas import (
     AuthResult,
     ConnectionActionResult,
+    ContentPage,
     ImportBatchRequest,
     ImportBatchResult,
     JobRead,
+    OverviewRead,
     PlatformConnectionRead,
     ScheduleCreate,
     ScheduleRead,
@@ -58,6 +63,7 @@ from talent_radar.services.collection import (
     enqueue_job,
     update_schedule as update_collection_schedule,
 )
+from talent_radar.services.content_queries import count_content, list_content
 from talent_radar.services.facebook_oauth import (
     FacebookOAuthError,
     begin_facebook_oauth,
@@ -418,3 +424,113 @@ def list_jobs(
             .limit(100)
         ).all()
     )
+
+
+@app.get("/jobs/{job_id}", response_model=JobRead)
+def get_job(
+    job_id: str,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> CollectionJob:
+    job = db.scalar(
+        select(CollectionJob).where(
+            CollectionJob.id == job_id,
+            CollectionJob.user_id == user.id,
+        )
+    )
+    if job is None:
+        raise HTTPException(status_code=404, detail="Khong tim thay job.")
+    return job
+
+
+@app.get("/posts", response_model=ContentPage)
+def list_posts(
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=30, ge=1, le=100),
+    search: str | None = Query(default=None, max_length=200),
+    source_id: str | None = None,
+    published_after: datetime | None = None,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> ContentPage:
+    return list_content(
+        db,
+        user,
+        kind="posts",
+        page=page,
+        page_size=page_size,
+        search=search,
+        source_id=source_id,
+        published_after=published_after,
+    )
+
+
+@app.get("/comments", response_model=ContentPage)
+def list_comments(
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=30, ge=1, le=100),
+    search: str | None = Query(default=None, max_length=200),
+    source_id: str | None = None,
+    published_after: datetime | None = None,
+    post_external_id: str | None = None,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> ContentPage:
+    return list_content(
+        db,
+        user,
+        kind="comments",
+        page=page,
+        page_size=page_size,
+        search=search,
+        source_id=source_id,
+        published_after=published_after,
+        post_external_id=post_external_id,
+    )
+
+
+@app.get("/overview", response_model=OverviewRead)
+def overview(
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> OverviewRead:
+    active_jobs = db.scalar(
+        select(func.count())
+        .select_from(CollectionJob)
+        .where(
+            CollectionJob.user_id == user.id,
+            CollectionJob.status.in_(("queued", "running")),
+        )
+    )
+    enabled_schedules = db.scalar(
+        select(func.count())
+        .select_from(CollectionSchedule)
+        .where(
+            CollectionSchedule.user_id == user.id,
+            CollectionSchedule.enabled.is_(True),
+            CollectionSchedule.last_status != "deleted",
+        )
+    )
+    connected_platforms = db.scalar(
+        select(func.count())
+        .select_from(PlatformConnection)
+        .where(
+            PlatformConnection.user_id == user.id,
+            PlatformConnection.status == "connected",
+        )
+    )
+    return OverviewRead(
+        posts=count_content(db, user, kind="posts"),
+        comments=count_content(db, user, kind="comments"),
+        active_jobs=active_jobs or 0,
+        enabled_schedules=enabled_schedules or 0,
+        connected_platforms=connected_platforms or 0,
+    )
+
+
+frontend_directory = Path(__file__).resolve().parents[1] / "web"
+app.mount(
+    "/",
+    StaticFiles(directory=frontend_directory, html=True, check_dir=False),
+    name="frontend",
+)

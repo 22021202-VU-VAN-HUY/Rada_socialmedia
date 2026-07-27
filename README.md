@@ -16,8 +16,9 @@ Facebook content.
 - Open TikTok or Threads login pages in the configured Coc Coc profile.
 - Collect public Facebook posts, comments, and replies visible to the connected
   account.
-- Run a Facebook source immediately or on a repeating schedule.
-- Keep the worker running after the Streamlit dashboard is closed.
+- Run a Facebook source only after an explicit action in the dashboard.
+- Use a React dashboard with instant client-side section navigation.
+- Keep the worker running after the browser tab is closed.
 - Review posts, comments, job status, errors, and export paths.
 - Retain the foreground PowerShell crawler as a manual fallback.
 
@@ -62,7 +63,7 @@ Open Talent Radar.cmd
 ```
 
 This starts the API and worker as hidden processes, then asks Windows to open
-`http://localhost:8501` in the default browser. When Coc Coc is the Windows default,
+`http://localhost:8000` in the default browser. When Coc Coc is the Windows default,
 it reuses Coc Coc's current default profile. VSCode's browser is not used.
 
 The PowerShell equivalent is:
@@ -71,8 +72,17 @@ The PowerShell equivalent is:
 .\scripts\start_talent_radar.ps1
 ```
 
-Open [http://localhost:8501](http://localhost:8501), create an account, then use
+Open [http://localhost:8000](http://localhost:8000), create an account, then use
 Settings.
+
+The React source is under `frontend/`. Rebuild the production assets after UI
+changes:
+
+```powershell
+Set-Location frontend
+npm install
+npm run build
+```
 
 Stop only the processes recorded by Talent Radar:
 
@@ -81,6 +91,10 @@ Stop only the processes recorded by Talent Radar:
 ```
 
 Runtime logs and PID files are stored under `data/runtime`.
+
+Automatic schedule enqueueing is disabled by default
+(`AUTOMATIC_SCHEDULES_ENABLED=false`). The background worker processes only jobs
+that were explicitly queued from the dashboard.
 
 ## Connect Facebook
 
@@ -141,6 +155,7 @@ Core endpoints:
 - `PATCH|DELETE /schedules/{id}`
 - `POST /schedules/{id}/run-now`
 - `GET /jobs`
+- `GET /overview`, `GET /posts`, `GET /comments`
 - `GET /sources`, `POST /sources/sync`
 - `POST /imports`
 

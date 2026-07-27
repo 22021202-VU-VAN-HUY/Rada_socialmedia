@@ -166,3 +166,42 @@ class JobRead(BaseModel):
     created_at: datetime | None = None
 
     model_config = {"from_attributes": True}
+
+
+class ContentItemRead(BaseModel):
+    id: str
+    source_id: str
+    source_name: str
+    platform: str
+    item_type: str
+    external_id: str | None = None
+    parent_external_id: str | None = None
+    author: str | None = None
+    content: str
+    permalink: str | None = None
+    published_at: datetime | None = None
+    collected_at: datetime | None = None
+    published_label: str | None = None
+    group_name: str | None = None
+    reaction_count: int = 0
+    reported_comment_count: int = 0
+    collected_comment_count: int = 0
+    topic: str | None = None
+    matched_terms: list[str] = Field(default_factory=list)
+    is_reply: bool = False
+
+
+class ContentPage(BaseModel):
+    items: list[ContentItemRead]
+    total: int
+    page: int
+    page_size: int
+    pages: int
+
+
+class OverviewRead(BaseModel):
+    posts: int
+    comments: int
+    active_jobs: int
+    enabled_schedules: int
+    connected_platforms: int

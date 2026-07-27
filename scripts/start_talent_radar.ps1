@@ -1,7 +1,6 @@
 [CmdletBinding()]
 param(
-    [int]$ApiPort = 8000,
-    [int]$DashboardPort = 8501
+    [int]$ApiPort = 8000
 )
 
 $ErrorActionPreference = "Stop"
@@ -45,17 +44,7 @@ Start-TalentRadarProcess -Name "api" -Arguments @(
 
 Start-Sleep -Seconds 2
 
-Start-TalentRadarProcess -Name "dashboard" -Arguments @(
-    "-m", "streamlit", "run", "src/talent_radar/dashboard/app.py",
-    "--server.address", "127.0.0.1",
-    "--server.port", "$DashboardPort",
-    "--server.headless", "true"
-)
+$appUrl = "http://localhost:$ApiPort"
+Start-Process $appUrl
 
-$dashboardUrl = "http://localhost:$DashboardPort"
-
-Start-Sleep -Seconds 2
-
-Start-Process $dashboardUrl
-
-Write-Output "Talent Radar: $dashboardUrl"
+Write-Output "Talent Radar: $appUrl"

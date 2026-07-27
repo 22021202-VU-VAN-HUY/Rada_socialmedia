@@ -22,7 +22,11 @@ from talent_radar.services.facebook_collector import (
     FacebookCollector,
     LoginRequiredError,
 )
-from talent_radar.services.import_adapter import load_import_file, run_import_batch
+from talent_radar.services.import_adapter import (
+    load_import_file,
+    records_from_coccoc_export,
+    run_import_batch,
+)
 
 
 class CollectionServiceError(ValueError):
@@ -263,6 +267,11 @@ def run_job(db: Session, settings: Settings, job: CollectionJob) -> None:
 
         def persist_progress(progress: dict) -> None:
             _write_export(output_path, progress)
+            records = records_from_coccoc_export(progress)
+            run_import_batch(
+                db,
+                ImportBatchRequest(import_batch_id=job.id, records=records),
+            )
             job.posts_collected = len(progress.get("posts", []))
             job.comments_collected = sum(
                 len(item.get("comments", []))

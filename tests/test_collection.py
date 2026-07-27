@@ -143,6 +143,7 @@ def test_facebook_job_writes_export_and_imports_records(
     )
     job = enqueue_job(db, user, schedule.id)
     progress_snapshots = []
+    progress_database_counts = []
 
     def fake_collect(*_args, **kwargs):
         payload = {
@@ -171,6 +172,7 @@ def test_facebook_job_writes_export_and_imports_records(
             "failures": [],
         }
         kwargs["on_progress"](payload)
+        progress_database_counts.append(len(db.scalars(select(RawItem)).all()))
         progress_file = next(tmp_path.glob("facebook_playwright_*.json"))
         progress_snapshots.append(
             json.loads(progress_file.read_text(encoding="utf-8"))
@@ -197,4 +199,5 @@ def test_facebook_job_writes_export_and_imports_records(
     assert Path(job.output_path).is_file()
     assert len(progress_snapshots) == 1
     assert len(progress_snapshots[0]["posts"]) == 1
+    assert progress_database_counts == [2]
     assert len(db.scalars(select(RawItem)).all()) == 2

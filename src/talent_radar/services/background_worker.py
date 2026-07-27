@@ -42,8 +42,8 @@ class BackgroundWorker:
 
     def run_once(self) -> None:
         with SessionLocal() as db:
-            enqueue_due_schedules(db)
+            if self.settings.automatic_schedules_enabled:
+                enqueue_due_schedules(db)
             job = next_queued_job(db)
             if job is not None:
                 run_job(db, self.settings, job)
-
