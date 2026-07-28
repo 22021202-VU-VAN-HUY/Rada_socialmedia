@@ -210,8 +210,14 @@ def connection_read(connection: PlatformConnection) -> PlatformConnectionRead:
         profile_directory=metadata.get("profile_directory"),
         profile_name=metadata.get("profile_name"),
         profile_account_name=metadata.get("profile_account_name"),
-        connected_account_id=metadata.get("facebook_user_id"),
-        connected_account_name=metadata.get("facebook_user_name"),
+        connected_account_id=(
+            metadata.get("connected_account_id")
+            or metadata.get("facebook_user_id")
+        ),
+        connected_account_name=(
+            metadata.get("connected_account_name")
+            or metadata.get("facebook_user_name")
+        ),
     )
 
 
