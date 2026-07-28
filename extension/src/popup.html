@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Talent Radar</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header>
+      <div class="brand-mark">TR</div>
+      <div>
+        <strong>Talent Radar</strong>
+        <span id="connection-label">Chưa ghép nối</span>
+      </div>
+      <span id="status-dot" class="status-dot"></span>
+    </header>
+
+    <main>
+      <form id="pair-form">
+        <label for="pairing-code">Mã từ website</label>
+        <input
+          id="pairing-code"
+          name="pairingCode"
+          autocomplete="one-time-code"
+          maxlength="9"
+          placeholder="ABCD-EFGH"
+          required
+        />
+        <label for="agent-name">Tên trình duyệt</label>
+        <input id="agent-name" name="agentName" maxlength="160" />
+        <details>
+          <summary>Địa chỉ máy chủ</summary>
+          <input
+            id="api-url"
+            name="apiUrl"
+            type="url"
+            value="http://localhost:8000"
+            required
+          />
+        </details>
+        <button class="primary" type="submit">Ghép nối</button>
+      </form>
+
+      <section id="agent-panel" hidden>
+        <div class="agent-summary">
+          <div>
+            <span class="label">Trình duyệt</span>
+            <strong id="agent-name-label"></strong>
+          </div>
+          <span id="job-label" class="job-label">Sẵn sàng</span>
+        </div>
+
+        <div class="platform-list">
+          <button type="button" data-platform-url="https://www.facebook.com/">
+            <span class="platform-mark facebook">f</span>
+            <span>Facebook</span>
+            <span class="open-label">Mở</span>
+          </button>
+          <button type="button" data-platform-url="https://www.tiktok.com/">
+            <span class="platform-mark tiktok">T</span>
+            <span>TikTok</span>
+            <span class="open-label">Mở</span>
+          </button>
+          <button type="button" data-platform-url="https://www.threads.net/">
+            <span class="platform-mark threads">@</span>
+            <span>Threads</span>
+            <span class="open-label">Mở</span>
+          </button>
+        </div>
+
+        <div class="actions">
+          <button id="poll-button" class="primary" type="button">
+            Kiểm tra công việc
+          </button>
+          <button id="disconnect-button" class="secondary" type="button">
+            Ngắt trên máy này
+          </button>
+        </div>
+      </section>
+
+      <p id="message" role="status"></p>
+    </main>
+
+    <script src="popup.js"></script>
+  </body>
+</html>
