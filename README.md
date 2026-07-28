@@ -1,9 +1,9 @@
 # Talent Radar
 
-Talent Radar is a local Windows app for collecting Facebook posts, comments, and
-replies through the existing Coc Coc profile selected in configuration. It provides local user accounts,
-platform connection settings, saved run configurations, background jobs, JSON exports,
-and database import.
+Talent Radar consists of a central React/FastAPI/PostgreSQL application and one
+cross-browser extension. The website owns accounts, sources, jobs, normalized
+social data, search, and future AI processing. The extension uses the session in
+the browser where it is installed to collect only user-requested jobs.
 
 The current collector is read-only. It does not post, react, message, or modify
 Facebook content.
@@ -11,19 +11,17 @@ Facebook content.
 ## Current Scope
 
 - Create a local Talent Radar account and sign in with email/password.
-- Connect Facebook with Meta OAuth in Coc Coc profile `Default` belonging to
-  Vũ Văn Huy.
-- Open TikTok or Threads login pages in the configured Coc Coc profile.
-- Collect public Facebook posts, comments, and replies visible to the connected
-  account.
-- Run a Facebook source only after an explicit action in the dashboard.
+- Pair Cốc Cốc, Chrome, Edge, Opera, or Firefox with a one-time code.
+- Open Facebook, TikTok, or Threads in the same installed browser profile.
+- Collect visible posts and comments with a separate adapter per platform.
+- Run a source only after an explicit action in the dashboard.
 - Use a React dashboard with instant client-side section navigation.
-- Keep the worker running after the browser tab is closed.
+- Stream each collected batch to PostgreSQL while a job is running.
 - Review posts, comments, job status, errors, and export paths.
 - Retain the foreground PowerShell crawler as a manual fallback.
 
-TikTok and Threads connection profiles are available, but their content collectors
-are not implemented in this release.
+Platform markup changes can require updates to an extension adapter. Official APIs
+remain preferable where they provide the required content and permissions.
 
 ## Setup
 
@@ -39,12 +37,6 @@ Copy-Item .env.example .env
 
 The default database URL is
 `postgresql+psycopg://talent_radar:talent_radar@localhost:5432/talent_radar`.
-Set Coc Coc as the Windows default browser. Talent Radar opens every app, login, and OAuth URL through
-the Windows browser association, so Coc Coc reuses its installed default profile.
-`COCCOC_USER_DATA_DIRECTORY` and `COCCOC_PROFILE_DIRECTORY` are read only to verify
-that the configured profile exists; Talent Radar does not create another browser
-user-data directory.
-
 Facebook OAuth also requires a Meta app:
 
 ```dotenv
@@ -98,23 +90,37 @@ Stop only the processes recorded by Talent Radar:
 
 Runtime logs and PID files are stored under `data/runtime`.
 
-The background worker processes only jobs that were explicitly queued from the
-dashboard. There is no automatic schedule enqueueing path.
+New collection jobs are claimed by a paired browser extension. The legacy
+Playwright worker does not claim extension jobs. There is no automatic schedule
+enqueueing path.
 
-## Connect Facebook
+## Browser Extension
 
-1. Open Settings and select **Lien ket** for Facebook.
-2. Windows opens Facebook's official OAuth permission screen in the current default
-   Coc Coc profile.
-3. Review the requested permission and continue.
-4. Facebook redirects to the local API callback. Talent Radar exchanges the code
-   server-side, verifies `/me`, and only then marks the connection as connected.
+Build both browser targets:
+
+```powershell
+Set-Location extension
+npm run build
+```
+
+Load `extension/dist/chromium` as an unpacked extension in Cốc Cốc, Chrome, Edge,
+Brave, or Opera. Load `extension/dist/firefox` in Firefox. In Talent Radar, open
+**Cài đặt > Extension**, create a one-time code, then enter it in the extension
+popup. The raw agent token is shown only to the extension and browser cookies are
+never sent to the API.
+
+The extension checks the queue every minute while the browser is running. A manual
+**Kiểm tra công việc** button is also available in its popup.
+
+## Platform Authorization
+
+Facebook OAuth remains available for account authorization. Browser collection is
+handled by the paired extension in the browser where the user is already signed in.
 
 The OAuth access token is protected with Windows DPAPI before it is stored locally.
-The collector only attaches to an already controlled instance of that profile and
-never launches a copied browser user. It does not export cookies, passwords, or saved
-credentials. OAuth proves account authorization; it does not automatically grant
-access to arbitrary Facebook group posts or comments.
+The extension does not export cookies, passwords, or saved credentials. OAuth proves
+account authorization; it does not automatically grant access to arbitrary Facebook
+group posts or comments.
 
 ## Run At Windows Logon
 
@@ -182,6 +188,10 @@ Core endpoints:
 - `GET /overview`, `GET /posts`, `GET /comments`
 - `GET /sources`, `POST /sources/sync`
 - `POST /imports`
+- `GET /browser-agents`, `POST /browser-agents/pairing-codes`
+- `POST /browser-agent/pair`, `POST /browser-agent/heartbeat`
+- `POST /browser-agent/jobs/claim`
+- `POST /browser-agent/jobs/{id}/items|complete`
 
 Connection, run-configuration, and job endpoints require the bearer token returned
 by login.
