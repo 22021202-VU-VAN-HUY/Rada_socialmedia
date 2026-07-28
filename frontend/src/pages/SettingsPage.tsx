@@ -1,12 +1,15 @@
 import { useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  Copy,
   ExternalLink,
   Link2Off,
   LoaderCircle,
+  Monitor,
   Play,
   RefreshCw,
   Trash2,
+  Unplug,
 } from "lucide-react";
 import { api } from "../api";
 import {
@@ -27,10 +30,16 @@ const platformLabels: Record<string, string> = {
 
 export function SettingsPage() {
   const queryClient = useQueryClient();
-  const [tab, setTab] = useState<"platforms" | "configurations">(
+  const [tab, setTab] = useState<
+    "platforms" | "browser-agents" | "configurations"
+  >(
     "platforms",
   );
   const [notice, setNotice] = useState("");
+  const [pairingCode, setPairingCode] = useState<{
+    code: string;
+    expiresAt: string;
+  } | null>(null);
   const connections = useQuery({
     queryKey: ["connections"],
     queryFn: api.connections,
@@ -44,6 +53,11 @@ export function SettingsPage() {
   const configurations = useQuery({
     queryKey: ["run-configurations"],
     queryFn: api.runConfigurations,
+  });
+  const browserAgents = useQuery({
+    queryKey: ["browser-agents"],
+    queryFn: api.browserAgents,
+    refetchInterval: 30_000,
   });
   const sources = useQuery({ queryKey: ["sources"], queryFn: api.sources });
   const connectionAction = useMutation({
@@ -71,6 +85,23 @@ export function SettingsPage() {
       void queryClient.invalidateQueries({ queryKey: ["sources"] });
     },
   });
+  const createPairingCode = useMutation({
+    mutationFn: api.createBrowserAgentPairingCode,
+    onSuccess: (result) => {
+      setPairingCode({
+        code: result.pairing_code,
+        expiresAt: result.expires_at,
+      });
+      setNotice("Mã ghép nối đã sẵn sàng.");
+    },
+  });
+  const revokeBrowserAgent = useMutation({
+    mutationFn: api.revokeBrowserAgent,
+    onSuccess: () => {
+      setNotice("Đã thu hồi trình duyệt.");
+      void queryClient.invalidateQueries({ queryKey: ["browser-agents"] });
+    },
+  });
 
   return (
     <>
@@ -79,6 +110,13 @@ export function SettingsPage() {
         description="Quản lý nền tảng, nguồn và cấu hình chạy thủ công."
       />
       <div className="settings-tabs" role="tablist">
+        <button
+          type="button"
+          className={tab === "browser-agents" ? "active" : ""}
+          onClick={() => setTab("browser-agents")}
+        >
+          Extension
+        </button>
         <button
           type="button"
           className={tab === "platforms" ? "active" : ""}
@@ -97,13 +135,19 @@ export function SettingsPage() {
       {notice && <Notice tone="success">{notice}</Notice>}
       {connectionAction.error && <ErrorState error={connectionAction.error} />}
       {syncSources.error && <ErrorState error={syncSources.error} />}
+      {createPairingCode.error && (
+        <ErrorState error={createPairingCode.error} />
+      )}
+      {revokeBrowserAgent.error && (
+        <ErrorState error={revokeBrowserAgent.error} />
+      )}
 
       {tab === "platforms" ? (
         <section className="settings-section">
           <div className="section-heading">
             <div>
               <h2>Kết nối nền tảng</h2>
-              <p>Phiên đăng nhập được mở bằng trình duyệt mặc định của Windows.</p>
+              <p>Quản lý quyền truy cập của từng nền tảng.</p>
             </div>
           </div>
           {connections.isLoading ? (
@@ -135,9 +179,11 @@ export function SettingsPage() {
                         <StatusBadge status={connection.status} />
                       </div>
                       <p>
-                        {connection.connected_account_name ||
-                          connection.profile_account_name ||
-                          "Chưa xác định tài khoản"}
+                        {connected
+                          ? connection.connected_account_name ||
+                            connection.profile_account_name ||
+                            "Đã xác minh phiên đăng nhập"
+                          : "Chưa có phiên đăng nhập được xác minh"}
                       </p>
                       {connection.last_error && (
                         <span className="row-error">{connection.last_error}</span>
@@ -204,6 +250,100 @@ export function SettingsPage() {
               Đồng bộ nguồn
             </button>
           </div>
+        </section>
+      ) : tab === "browser-agents" ? (
+        <section className="settings-section">
+          <div className="section-heading browser-agent-heading">
+            <div>
+              <h2>Trình duyệt thu thập</h2>
+              <p>Cốc Cốc, Chrome, Edge và Firefox dùng chung một extension.</p>
+            </div>
+            <button
+              className="primary-button"
+              type="button"
+              onClick={() => createPairingCode.mutate()}
+              disabled={createPairingCode.isPending}
+            >
+              {createPairingCode.isPending ? (
+                <LoaderCircle className="spin" size={17} />
+              ) : (
+                <Monitor size={17} />
+              )}
+              Tạo mã ghép nối
+            </button>
+          </div>
+
+          {pairingCode && (
+            <div className="pairing-strip">
+              <div>
+                <span>Mã một lần</span>
+                <strong>{pairingCode.code}</strong>
+              </div>
+              <div>
+                <span>Hết hạn</span>
+                <strong>{formatDateTime(pairingCode.expiresAt)}</strong>
+              </div>
+              <button
+                className="icon-button"
+                type="button"
+                title="Sao chép mã"
+                aria-label="Sao chép mã"
+                onClick={() => {
+                  void navigator.clipboard.writeText(pairingCode.code);
+                  setNotice("Đã sao chép mã ghép nối.");
+                }}
+              >
+                <Copy size={17} />
+              </button>
+            </div>
+          )}
+
+          {browserAgents.isLoading ? (
+            <LoadingState />
+          ) : browserAgents.error ? (
+            <ErrorState error={browserAgents.error} />
+          ) : browserAgents.data?.length === 0 ? (
+            <EmptyState
+              title="Chưa có trình duyệt"
+              detail="Tạo mã rồi nhập mã đó vào popup Talent Radar Browser Agent."
+            />
+          ) : (
+            <div className="browser-agent-list">
+              {browserAgents.data?.map((agent) => (
+                <div className="browser-agent-row" key={agent.id}>
+                  <div className="agent-browser-icon">
+                    <Monitor size={18} />
+                  </div>
+                  <div className="browser-agent-info">
+                    <div>
+                      <h3>{agent.name}</h3>
+                      <StatusBadge status={agent.status} />
+                    </div>
+                    <p>
+                      {agent.browser}
+                      {agent.version ? ` ${agent.version}` : ""} ·{" "}
+                      {agent.capabilities
+                        .map((platform) => platformLabels[platform] || platform)
+                        .join(", ")}
+                    </p>
+                    <span>
+                      Kiểm tra lần cuối: {formatDateTime(agent.last_seen_at)}
+                    </span>
+                  </div>
+                  <button
+                    className="icon-button danger-icon"
+                    type="button"
+                    title="Thu hồi trình duyệt"
+                    aria-label="Thu hồi trình duyệt"
+                    disabled={revokeBrowserAgent.isPending}
+                    onClick={() => revokeBrowserAgent.mutate(agent.id)}
+                  >
+                    <Unplug size={17} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </section>
       ) : (
         <RunConfigurationsPanel
