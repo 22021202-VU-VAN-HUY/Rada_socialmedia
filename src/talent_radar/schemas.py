@@ -142,6 +142,83 @@ class ConnectionActionResult(BaseModel):
     message: str
 
 
+class BrowserAgentRead(BaseModel):
+    id: str
+    name: str
+    browser: str
+    version: str | None = None
+    status: str
+    capabilities: list[str]
+    last_seen_at: datetime
+    created_at: datetime | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class BrowserAgentPairingCodeRead(BaseModel):
+    pairing_code: str
+    expires_at: datetime
+
+
+class BrowserAgentPairRequest(BaseModel):
+    pairing_code: str = Field(min_length=8, max_length=32)
+    name: str = Field(min_length=1, max_length=160)
+    browser: str = Field(default="chromium", min_length=1, max_length=80)
+    version: str | None = Field(default=None, max_length=80)
+    capabilities: list[Platform] = Field(default_factory=list)
+
+
+class BrowserAgentPairResult(BaseModel):
+    agent_token: str
+    agent: BrowserAgentRead
+
+
+class BrowserPlatformConnection(BaseModel):
+    platform: Platform
+    connected: bool
+    account_id: str | None = Field(default=None, max_length=255)
+    account_name: str | None = Field(default=None, max_length=255)
+
+
+class BrowserAgentHeartbeat(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=160)
+    browser: str | None = Field(default=None, min_length=1, max_length=80)
+    version: str | None = Field(default=None, max_length=80)
+    capabilities: list[Platform] | None = None
+    connections: list[BrowserPlatformConnection] | None = None
+
+
+class BrowserAgentClaimRequest(BaseModel):
+    supported_platforms: list[Platform] = Field(default_factory=list)
+
+
+class BrowserAgentJob(BaseModel):
+    id: str
+    platform: str
+    source_id: str
+    source_name: str
+    source_url: str
+    max_posts: int
+    max_comments_per_post: int
+    lookback_hours: int
+    include_replies: bool
+    published_since: datetime
+    filters: dict[str, Any] = Field(default_factory=dict)
+
+
+class BrowserAgentItemBatch(BaseModel):
+    records: list[ImportRecord] = Field(min_length=1, max_length=500)
+
+
+class BrowserAgentJobComplete(BaseModel):
+    status: Literal["completed", "failed"]
+    error: str | None = Field(default=None, max_length=4000)
+    posts_collected: int = Field(default=0, ge=0)
+    comments_collected: int = Field(default=0, ge=0)
+    replies_collected: int = Field(default=0, ge=0)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
 class RunConfigurationCreate(BaseModel):
     connection_id: str
     source_id: str
@@ -184,6 +261,8 @@ class JobRead(BaseModel):
     platform: str
     status: str
     trigger: str
+    executor: str
+    browser_agent_id: str | None = None
     started_at: datetime | None = None
     completed_at: datetime | None = None
     posts_collected: int
