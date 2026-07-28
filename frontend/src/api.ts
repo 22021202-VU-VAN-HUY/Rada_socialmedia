@@ -1,5 +1,7 @@
 import type {
   AuthResult,
+  BrowserAgent,
+  BrowserAgentPairingCode,
   Connection,
   ConnectionResult,
   ContentPage,
@@ -110,6 +112,13 @@ export const api = {
   sources: () => request<Source[]>("/sources"),
   syncSources: () => request<Source[]>("/sources/sync", { method: "POST" }),
   connections: () => request<Connection[]>("/connections"),
+  browserAgents: () => request<BrowserAgent[]>("/browser-agents"),
+  createBrowserAgentPairingCode: () =>
+    request<BrowserAgentPairingCode>("/browser-agents/pairing-codes", {
+      method: "POST",
+    }),
+  revokeBrowserAgent: (id: string) =>
+    request<void>(`/browser-agents/${id}`, { method: "DELETE" }),
   connect: (platform: string) =>
     request<ConnectionResult>(`/connections/${platform}/connect`, {
       method: "POST",
