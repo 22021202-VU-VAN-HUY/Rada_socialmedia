@@ -89,6 +89,35 @@ class OAuthState(TimestampMixin, Base):
     used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
+class BrowserAgent(TimestampMixin, Base):
+    __tablename__ = "browser_agents"
+
+    id: Mapped[str] = mapped_column(String(120), primary_key=True)
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    name: Mapped[str] = mapped_column(String(160))
+    browser: Mapped[str] = mapped_column(String(80), default="chromium")
+    version: Mapped[str | None] = mapped_column(String(80))
+    status: Mapped[str] = mapped_column(String(40), default="online", index=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    capabilities: Mapped[list] = mapped_column(JSON_DOCUMENT, default=list)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class BrowserAgentPairingCode(TimestampMixin, Base):
+    __tablename__ = "browser_agent_pairing_codes"
+
+    id: Mapped[str] = mapped_column(String(120), primary_key=True)
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    code_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
 class Source(TimestampMixin, Base):
     __tablename__ = "sources"
     __table_args__ = (
@@ -168,6 +197,13 @@ class CollectionJob(TimestampMixin, Base):
     platform: Mapped[str] = mapped_column(String(40), index=True)
     status: Mapped[str] = mapped_column(String(40), default="queued", index=True)
     trigger: Mapped[str] = mapped_column(String(40), default="manual")
+    executor: Mapped[str] = mapped_column(
+        String(40), default="browser_extension", index=True
+    )
+    browser_agent_id: Mapped[str | None] = mapped_column(
+        ForeignKey("browser_agents.id", ondelete="SET NULL"), index=True
+    )
+    claimed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     posts_collected: Mapped[int] = mapped_column(Integer, default=0)
