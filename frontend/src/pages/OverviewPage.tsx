@@ -25,7 +25,7 @@ export function OverviewPage() {
     <>
       <PageHeader
         title="Tổng quan"
-        description="Tình hình thu thập và dữ liệu liên quan đến VSF."
+        description="Tình hình kết nối và thu thập dữ liệu mạng xã hội."
       />
       {overview.isLoading ? (
         <LoadingState />
