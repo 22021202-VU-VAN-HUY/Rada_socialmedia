@@ -121,7 +121,7 @@ export function PostsPage() {
     <>
       <PageHeader
         title="Bài viết"
-        description="Nội dung Facebook đã vượt qua bộ lọc chủ đề VSF."
+        description="Tất cả bài viết Facebook được đăng trong ngày hôm nay."
         actions={
           <>
             <button
@@ -146,7 +146,7 @@ export function PostsPage() {
               )}
               {active
                 ? `Đang lấy ${jobs.activeJob?.posts_collected || 0} bài`
-                : "Lấy dữ liệu VSF"}
+                : "Lấy bài viết hôm nay"}
             </button>
           </>
         }
@@ -198,7 +198,7 @@ export function PostsPage() {
       {collect.error && <ErrorState error={collect.error} />}
       {jobs.activeJob && (
         <Notice>
-          Dữ liệu mới sẽ xuất hiện trong bảng khi crawler tìm thấy bài phù hợp.
+          Bài viết hôm nay sẽ xuất hiện trong bảng ngay khi extension thu thập được.
         </Notice>
       )}
 
