@@ -94,7 +94,7 @@ Start-TalentRadarProcess -Name "api" -Arguments @(
 
 Start-Sleep -Seconds 2
 
-$appUrl = "http://localhost:$ApiPort"
+$appUrl = "http://127.0.0.1:$ApiPort"
 Start-Process $appUrl
 
 Write-Output "Talent Radar: $appUrl"
