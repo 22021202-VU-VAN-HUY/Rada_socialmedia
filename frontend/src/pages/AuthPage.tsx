@@ -24,6 +24,7 @@ export function AuthPage({
           ? await api.login(email, password)
           : await api.register(email, password);
       storeSession(result);
+      window.dispatchEvent(new Event("talent-radar:check-connections"));
       onAuthenticated(result.user);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Không thể đăng nhập.");
