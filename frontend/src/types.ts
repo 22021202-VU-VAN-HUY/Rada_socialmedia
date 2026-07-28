@@ -50,6 +50,8 @@ export type Job = {
   platform: string;
   status: "queued" | "running" | "completed" | "failed";
   trigger: "manual" | "scheduled";
+  executor: "browser_extension" | "legacy_playwright";
+  browser_agent_id: string | null;
   started_at: string | null;
   completed_at: string | null;
   posts_collected: number;
@@ -100,6 +102,22 @@ export type Connection = {
 export type ConnectionResult = {
   connection: Connection;
   message: string;
+};
+
+export type BrowserAgent = {
+  id: string;
+  name: string;
+  browser: string;
+  version: string | null;
+  status: "online" | "offline" | "revoked";
+  capabilities: string[];
+  last_seen_at: string;
+  created_at: string | null;
+};
+
+export type BrowserAgentPairingCode = {
+  pairing_code: string;
+  expires_at: string;
 };
 
 export type RunConfiguration = {
