@@ -83,7 +83,7 @@ export function CommentsPage() {
     <>
       <PageHeader
         title="Bình luận"
-        description="Bình luận và phản hồi thuộc các bài viết liên quan đến VSF."
+        description="Bình luận và phản hồi thuộc các bài viết đã thu thập."
       />
       <div className="filter-bar">
         <form className="search-field" onSubmit={applySearch}>
