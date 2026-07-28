@@ -1,0 +1,53 @@
+{
+  "manifest_version": 3,
+  "name": "Talent Radar Browser Agent",
+  "version": "0.1.0",
+  "description": "Thu thap noi dung da duoc nguoi dung yeu cau cho Talent Radar.",
+  "permissions": ["alarms", "cookies", "storage", "tabs"],
+  "host_permissions": [
+    "http://localhost:8000/*",
+    "http://127.0.0.1:8000/*",
+    "https://*.facebook.com/*",
+    "https://*.tiktok.com/*",
+    "https://*.threads.net/*",
+    "https://*.instagram.com/*"
+  ],
+  "background": {
+    "scripts": ["background.js"]
+  },
+  "action": {
+    "default_title": "Talent Radar",
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://*.facebook.com/*",
+        "https://*.tiktok.com/*",
+        "https://*.threads.net/*"
+      ],
+      "js": [
+        "collectors/shared.js",
+        "collectors/facebook.js",
+        "collectors/tiktok.js",
+        "collectors/threads.js",
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "http://localhost:8000/*",
+        "http://127.0.0.1:8000/*"
+      ],
+      "js": ["website.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "browser-agent@talent-radar.local",
+      "strict_min_version": "121.0"
+    }
+  }
+}
