@@ -122,6 +122,7 @@ def enqueue_job(
         platform=connection.platform,
         status="queued",
         trigger="manual",
+        executor="browser_extension",
     )
     db.add(job)
     db.commit()
@@ -190,7 +191,10 @@ def enqueue_default_facebook_group_job(
 def next_queued_job(db: Session) -> CollectionJob | None:
     return db.scalar(
         select(CollectionJob)
-        .where(CollectionJob.status == "queued")
+        .where(
+            CollectionJob.status == "queued",
+            CollectionJob.executor == "legacy_playwright",
+        )
         .order_by(CollectionJob.created_at)
         .limit(1)
     )
