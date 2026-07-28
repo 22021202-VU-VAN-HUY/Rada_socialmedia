@@ -3,8 +3,9 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
+from uuid import uuid4
 
-from fastapi import Depends, FastAPI, HTTPException, Query, Response
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Response
 from fastapi.responses import HTMLResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.staticfiles import StaticFiles
@@ -15,6 +16,7 @@ from talent_radar.core.config import get_settings
 from talent_radar.core.database import get_db, upgrade_database
 from talent_radar.models import (
     AuthSession,
+    BrowserAgent,
     CollectionJob,
     PlatformConnection,
     RunConfiguration,
@@ -23,6 +25,15 @@ from talent_radar.models import (
 )
 from talent_radar.schemas import (
     AuthResult,
+    BrowserAgentClaimRequest,
+    BrowserAgentHeartbeat,
+    BrowserAgentItemBatch,
+    BrowserAgentJob,
+    BrowserAgentJobComplete,
+    BrowserAgentPairRequest,
+    BrowserAgentPairResult,
+    BrowserAgentPairingCodeRead,
+    BrowserAgentRead,
     ConnectionActionResult,
     ContentPage,
     ImportBatchRequest,
@@ -52,8 +63,21 @@ from talent_radar.services.browser_profiles import (
     PLATFORM_LOGIN_URLS,
     connection_read,
     connection_for_platform,
-    launch_coccoc_url,
     launch_login_browser,
+)
+from talent_radar.services.browser_agents import (
+    BrowserAgentError,
+    authenticate_agent,
+    claim_job,
+    complete_job,
+    create_pairing_code,
+    heartbeat_agent,
+    import_job_items,
+    list_agents,
+    pair_agent,
+    reconcile_connections,
+    reset_connections_for_login,
+    revoke_agent,
 )
 from talent_radar.services.collection import (
     CollectionServiceError,
@@ -66,7 +90,6 @@ from talent_radar.services.collection import (
 from talent_radar.services.content_queries import count_content, list_content
 from talent_radar.services.facebook_oauth import (
     FacebookOAuthError,
-    begin_facebook_oauth,
     complete_facebook_oauth,
     mark_facebook_oauth_error,
 )
@@ -108,6 +131,18 @@ def current_user(auth: tuple[User, AuthSession] = Depends(current_auth)) -> User
     return auth[0]
 
 
+def current_browser_agent(
+    x_agent_token: str | None = Header(default=None, alias="X-Agent-Token"),
+    db: Session = Depends(get_db),
+) -> BrowserAgent:
+    if not x_agent_token:
+        raise HTTPException(status_code=401, detail="Thieu browser agent token.")
+    try:
+        return authenticate_agent(db, x_agent_token)
+    except BrowserAgentError as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+
+
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
@@ -131,6 +166,7 @@ def register(payload: UserCredentials, db: Session = Depends(get_db)) -> AuthRes
 def login(payload: UserCredentials, db: Session = Depends(get_db)) -> AuthResult:
     try:
         user = authenticate_user(db, payload.email, payload.password)
+        reset_connections_for_login(db, user)
         token, auth_session = create_session(db, user, settings.auth_session_hours)
         return AuthResult(
             access_token=token,
@@ -192,21 +228,125 @@ def import_batch(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+@app.get("/browser-agents", response_model=list[BrowserAgentRead])
+def get_browser_agents(
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> list[BrowserAgent]:
+    return list_agents(db, user)
+
+
+@app.post(
+    "/browser-agents/pairing-codes",
+    response_model=BrowserAgentPairingCodeRead,
+    status_code=201,
+)
+def new_browser_agent_pairing_code(
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> BrowserAgentPairingCodeRead:
+    code, pairing = create_pairing_code(db, user)
+    return BrowserAgentPairingCodeRead(
+        pairing_code=code,
+        expires_at=pairing.expires_at,
+    )
+
+
+@app.delete("/browser-agents/{agent_id}", status_code=204)
+def delete_browser_agent(
+    agent_id: str,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> Response:
+    try:
+        revoke_agent(db, user, agent_id)
+    except BrowserAgentError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return Response(status_code=204)
+
+
+@app.post("/browser-agent/pair", response_model=BrowserAgentPairResult)
+def pair_browser_agent(
+    payload: BrowserAgentPairRequest,
+    db: Session = Depends(get_db),
+) -> BrowserAgentPairResult:
+    try:
+        token, agent = pair_agent(db, payload)
+        return BrowserAgentPairResult(agent_token=token, agent=agent)
+    except BrowserAgentError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/browser-agent/heartbeat", response_model=BrowserAgentRead)
+def browser_agent_heartbeat(
+    payload: BrowserAgentHeartbeat,
+    agent: BrowserAgent = Depends(current_browser_agent),
+    db: Session = Depends(get_db),
+) -> BrowserAgent:
+    return heartbeat_agent(db, agent, payload)
+
+
+@app.post("/browser-agent/jobs/claim", response_model=BrowserAgentJob | None)
+def claim_browser_agent_job(
+    payload: BrowserAgentClaimRequest,
+    agent: BrowserAgent = Depends(current_browser_agent),
+    db: Session = Depends(get_db),
+) -> BrowserAgentJob | None:
+    return claim_job(db, agent, payload)
+
+
+@app.post("/browser-agent/jobs/{job_id}/items", response_model=JobRead)
+def add_browser_agent_job_items(
+    job_id: str,
+    payload: BrowserAgentItemBatch,
+    agent: BrowserAgent = Depends(current_browser_agent),
+    db: Session = Depends(get_db),
+) -> CollectionJob:
+    try:
+        return import_job_items(db, agent, job_id, payload)
+    except (BrowserAgentError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/browser-agent/jobs/{job_id}/complete", response_model=JobRead)
+def complete_browser_agent_job(
+    job_id: str,
+    payload: BrowserAgentJobComplete,
+    agent: BrowserAgent = Depends(current_browser_agent),
+    db: Session = Depends(get_db),
+) -> CollectionJob:
+    try:
+        return complete_job(db, agent, job_id, payload)
+    except BrowserAgentError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @app.get("/connections", response_model=list[PlatformConnectionRead])
 def list_connections(
     user: User = Depends(current_user),
     db: Session = Depends(get_db),
 ) -> list[PlatformConnectionRead]:
-    try:
-        for platform in PLATFORM_LOGIN_URLS:
-            connection_for_platform(db, settings, user, platform)
-    except BrowserProfileError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    connections = db.scalars(
-        select(PlatformConnection)
-        .where(PlatformConnection.user_id == user.id)
-        .order_by(PlatformConnection.platform)
-    ).all()
+    for platform, login_url in PLATFORM_LOGIN_URLS.items():
+        connection = db.scalar(
+            select(PlatformConnection).where(
+                PlatformConnection.user_id == user.id,
+                PlatformConnection.platform == platform,
+            )
+        )
+        if connection is None:
+            db.add(
+                PlatformConnection(
+                    id=f"connection_{uuid4().hex}",
+                    user_id=user.id,
+                    platform=platform,
+                    status="disconnected",
+                    auth_method="browser_extension",
+                    profile_dir="",
+                    login_url=login_url,
+                )
+            )
+    db.commit()
+    connections = reconcile_connections(db, user)
     return [connection_read(connection) for connection in connections]
 
 
@@ -218,18 +358,12 @@ def connect_platform(
 ) -> ConnectionActionResult:
     try:
         connection = connection_for_platform(db, settings, user, platform)
-        if platform.casefold() == "facebook":
-            oauth_url = begin_facebook_oauth(db, settings, connection)
-            connection.browser_process_id = launch_coccoc_url(settings, oauth_url)
-            db.commit()
-            db.refresh(connection)
-            message = (
-                "Da mo cua so cap quyen Facebook trong trinh duyet mac dinh. "
-                "Ket noi chi hoan tat sau khi Facebook chuyen ve Talent Radar."
-            )
-        else:
-            connection = launch_login_browser(db, settings, connection)
-            message = "Da mo trang dang nhap trong trinh duyet mac dinh."
+        connection.auth_method = "browser_extension"
+        connection = launch_login_browser(db, settings, connection)
+        message = (
+            "Da mo trang dang nhap trong trinh duyet mac dinh. "
+            "Talent Radar chi bao da ket noi sau khi extension xac minh phien dang nhap."
+        )
         return ConnectionActionResult(
             connection=connection_read(connection),
             message=message,
